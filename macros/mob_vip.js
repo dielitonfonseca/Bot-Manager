@@ -11,12 +11,14 @@ class MobVipMacro {
 
     this.PERSONAL_SWORD_SLOT = 9;
     this.MIN_DURABILITY_THRESHOLD = 150;
+    this.accumulatedBalance = 0;
+    this.isTransferring = false;
 
     this.lastCommandTime = 0;
     this.lastInventoryCheck = 0;
     this.isHandlingAfk = false;
 
-    this.chatListener = (message) => {
+    this.chatListener = async (message) => {
       const raw = message.toString();
       const clean = raw.replace(/§[0-9a-fk-or]/gi, '').trim();
       const lower = clean
@@ -38,6 +40,26 @@ class MobVipMacro {
           if (!isNaN(val)) {
             this.emitLog(`💵 Venda computada: +${val.toFixed(2)} Coins.`);
             this.sharedState.addProfit(this.config.username, val);
+
+            this.accumulatedBalance += val;
+
+            if (this.accumulatedBalance >= 1000000 && !this.isTransferring && this.config.username.toLowerCase() !== 'fatal') {
+              this.isTransferring = true;
+              const amountToSend = Math.floor(this.accumulatedBalance);
+              this.emitLog(`💰 [VIP] Saldo atingiu 1kk (${amountToSend} Coins)! Transferindo para Fatal em 2 etapas...`);
+
+              try {
+                this.bot.chat(`/money pay Fatal ${amountToSend}`);
+                await this.sleep(1000);
+                this.bot.chat(`/money pay Fatal ${amountToSend}`);
+                this.emitLog(`📤 [VIP] Transferência confirmada! Saldo zerado.`);
+                this.accumulatedBalance = 0;
+              } catch (tErr) {
+                this.emitLog(`❌ Erro na transferência VIP: ${tErr.message}`);
+              } finally {
+                this.isTransferring = false;
+              }
+            }
           }
         }
       }
@@ -303,7 +325,6 @@ class MobVipMacro {
     return false;
   }
 
-  // Tenta resgatar uma espada reserva caso o VIP esteja sem nenhuma
   async fetchEmergencySwordFromChest() {
     this.emitLog('🆘 [EMERGÊNCIA] VIP totalmente sem espada! Buscando reserva em /home fatal repararespadas1...');
     await this.teleportVip('home fatal repararespadas1');
@@ -523,7 +544,12 @@ class MobVipMacro {
   }
 
   async repairFakeSwordsRoutine() {
-    this.emitLog('⚡ Quantidade de espadas usadas >= 3! Iniciando conserto...');
+    this.emitLog('⚡ Quantidade de espadas usadas >= 3! Limpando drops antes de ir aos baús...');
+
+    // Venda prévia no mob antes de qualquer teleporte
+    this.emitLog('📦 Executando /vender mobs antes de sair do mob...');
+    this.bot.chat('/vender mobs');
+    await this.sleep(1000);
 
     await this.checkAndSellDrops();
     await this.ensureDiamondBlocksSupply();
@@ -580,17 +606,14 @@ class MobVipMacro {
         const restored = await this.restorePersonalSwordToHand();
         currentSword = this.bot.heldItem;
 
-        // Se ainda não estiver com espada, tenta reparar ou resgatar
         if (!restored || !currentSword || currentSword.name !== 'diamond_sword') {
           const hasAnySword = this.getDiamondSword();
           if (hasAnySword) {
             await this.repairCurrentSword();
           } else {
-            // Tenta pegar espada reserva no baú
             const retrieved = await this.fetchEmergencySwordFromChest();
             if (!retrieved) {
               this.emitLog('❌ VIP totalmente sem espadas no inventário e baús vazios. Aguardando 5s para checar novamente...');
-              // SLEEP OBRIGATÓRIO: Impede o loop infinito de travar a thread e o chat
               await this.sleep(5000);
             }
           }

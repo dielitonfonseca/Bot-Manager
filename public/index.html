@@ -129,7 +129,7 @@
     <!-- COLUNA DA ESQUERDA (4 colunas): Cadastro Completo, Contas e Inventário -->
     <div class="lg:col-span-4 flex flex-col gap-6 w-full">
 
-      <!-- CARD 1: Cadastrar Nova Conta Completo (Com Senha, Host, Porta e Proxy) -->
+      <!-- CARD 1: Cadastrar Nova Conta -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
           <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
@@ -141,13 +141,43 @@
           </button>
         </div>
         <div id="card-add-account" class="p-4 space-y-3 card-transition">
-          <div class="grid grid-cols-2 gap-3">
+
+          <!-- Painel Recolhível: Configuração de Senha Padrão -->
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
+            <div class="flex items-center justify-between cursor-pointer" onclick="toggleCard('panel-default-password', this)">
+              <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-key text-amber-400 text-xs"></i>
+                Configurar Senha Padrão
+              </span>
+              <button type="button" class="text-slate-400 hover:text-white text-xs">
+                <i class="fa-solid fa-chevron-down"></i>
+              </button>
+            </div>
+            <div id="panel-default-password" class="hidden mt-2.5 pt-2.5 border-t border-slate-800 space-y-2">
+              <input id="input-default-password" type="password" placeholder="Definir senha padrão global..." class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+              <div class="flex justify-end">
+                <button type="button" onclick="saveDefaultPassword()" class="bg-amber-600 hover:bg-amber-500 text-slate-950 text-xs font-bold px-3 py-1 rounded-lg transition-colors">
+                  Salvar Padrão
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Campos Nick e Senha com Checkbox de Senha Padrão -->
+          <div class="space-y-2">
             <div>
               <label class="block text-xs font-semibold text-slate-400 mb-1">Nick do Jogador</label>
-              <input id="input-username" type="text" placeholder="FatalAmante" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+              <input id="input-username" type="text" oninput="handleNickInput(this.value)" placeholder="FatalAmante" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
             </div>
+
             <div>
-              <label class="block text-xs font-semibold text-slate-400 mb-1">Senha in-game</label>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-semibold text-slate-400">Senha in-game</label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input id="check-use-default-pass" type="checkbox" onchange="toggleUseDefaultPassword(this.checked)" class="w-3.5 h-3.5 rounded bg-slate-950 border-slate-800 text-indigo-600 focus:ring-0 cursor-pointer">
+                  <span class="text-[11px] text-slate-400">Usar senha padrão</span>
+                </label>
+              </div>
               <input id="input-password" type="password" placeholder="Senha do /login" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
             </div>
           </div>
@@ -165,7 +195,7 @@
 
           <div>
             <label class="block text-xs font-semibold text-slate-400 mb-1">Tipo de Macro</label>
-            <select id="select-macro" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            <select id="select-macro" onchange="handleMacroChange()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
               <option value="mob_farmer">Mata Mob (Sem VIP - Troca em Baú)</option>
               <option value="mob_vip">Mata Mob (VIP - Auto-Reparo & Suporte)</option>
             </select>
@@ -222,7 +252,7 @@
         </div>
       </section>
 
-      <!-- CARD 3: Inventário Gráfico Ajustado (Sem Espaço Vazio Excessivo) -->
+      <!-- CARD 3: Inventário Gráfico Ajustado -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
           <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
@@ -235,7 +265,6 @@
           </button>
         </div>
         <div id="card-inventory" class="p-3 card-transition flex flex-col gap-3">
-          <!-- Inventário Principal (3x9) -->
           <div>
             <div class="text-[10px] uppercase font-bold text-slate-400 mb-1.5 flex items-center justify-between">
               <span>Principal (3x9)</span>
@@ -244,7 +273,6 @@
             <div id="inv-main-grid" class="inv-grid rounded-lg bg-slate-950 p-1.5 border border-slate-800/80"></div>
           </div>
 
-          <!-- Hotbar (1x9) -->
           <div>
             <div class="text-[10px] uppercase font-bold text-slate-400 mb-1.5 flex items-center justify-between">
               <span>Hotbar (1x9)</span>
@@ -326,7 +354,12 @@
     let logsHistory = [];
     let chatsHistory = new Map();
 
-  const ITEM_ICONS = {
+    // Banco de contas salvas no localStorage
+    let savedAccounts = JSON.parse(localStorage.getItem('cl_saved_accounts') || '{}');
+    let defaultPassword = localStorage.getItem('cl_default_password') || '';
+
+    // Mapeamento dos itens locais para public/icons
+    const ITEM_ICONS = {
       diamond_sword: '<img src="/icons/sword.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow">',
       iron_sword: '<img src="/icons/sword.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow opacity-75">',
       golden_sword: '<img src="/icons/sword.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow">',
@@ -337,6 +370,88 @@
       beef: '<img src="/icons/steak.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow">',
       steak: '<img src="/icons/steak.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow">'
     };
+
+    // Inicialização da Senha Padrão
+    function initDefaultPassword() {
+      const inputDef = document.getElementById('input-default-password');
+      if (defaultPassword) {
+        inputDef.value = defaultPassword;
+      }
+    }
+
+    function saveDefaultPassword() {
+      const inputDef = document.getElementById('input-default-password');
+      defaultPassword = inputDef.value.trim();
+      localStorage.setItem('cl_default_password', defaultPassword);
+
+      if (document.getElementById('check-use-default-pass').checked) {
+        document.getElementById('input-password').value = defaultPassword;
+      }
+
+      alert('Senha padrão salva com sucesso no navegador!');
+    }
+
+    function toggleUseDefaultPassword(useDefault) {
+      const passInput = document.getElementById('input-password');
+      if (useDefault) {
+        passInput.value = defaultPassword;
+        passInput.disabled = true;
+        passInput.classList.add('opacity-50');
+      } else {
+        passInput.disabled = false;
+        passInput.classList.remove('opacity-50');
+      }
+    }
+
+    // Identifica nick já existente e aplica as preferências salvas
+    function handleNickInput(nick) {
+      const cleanNick = nick.trim();
+      if (!cleanNick) return;
+
+      const accountData = savedAccounts[cleanNick.toLowerCase()];
+      if (accountData) {
+        // Seleciona automaticamente a macro associada a este nick
+        if (accountData.macroType) {
+          document.getElementById('select-macro').value = accountData.macroType;
+        }
+
+        // Se a conta usava senha padrão
+        if (accountData.useDefaultPassword) {
+          document.getElementById('check-use-default-pass').checked = true;
+          toggleUseDefaultPassword(true);
+        } else if (accountData.password) {
+          document.getElementById('check-use-default-pass').checked = false;
+          toggleUseDefaultPassword(false);
+          document.getElementById('input-password').value = accountData.password;
+        }
+
+        // Preenche host e porta se salvos
+        if (accountData.host) document.getElementById('input-server-host').value = accountData.host;
+        if (accountData.port) document.getElementById('input-server-port').value = accountData.port;
+
+        // Preenche proxy se salvo
+        if (accountData.proxy) {
+          document.getElementById('check-use-proxy').checked = true;
+          toggleProxyInputs(true);
+          document.getElementById('input-proxy-host').value = accountData.proxy.host || '';
+          document.getElementById('input-proxy-port').value = accountData.proxy.port || '';
+          document.getElementById('input-proxy-user').value = accountData.proxy.user || '';
+          document.getElementById('input-proxy-pass').value = accountData.proxy.pass || '';
+        }
+      }
+    }
+
+    // Salva a associação do macro ao nick digitado
+    function handleMacroChange() {
+      const nick = document.getElementById('input-username').value.trim();
+      const macro = document.getElementById('select-macro').value;
+      if (nick) {
+        const key = nick.toLowerCase();
+        if (!savedAccounts[key]) savedAccounts[key] = {};
+        savedAccounts[key].macroType = macro;
+        localStorage.setItem('cl_saved_accounts', JSON.stringify(savedAccounts));
+      }
+    }
 
     function toggleProxyInputs(show) {
       const container = document.getElementById('proxy-fields');
@@ -352,10 +467,10 @@
       const icon = btn.querySelector('i');
       if (card.classList.contains('hidden')) {
         card.classList.remove('hidden');
-        icon.className = 'fa-solid fa-chevron-up';
+        if (icon) icon.className = 'fa-solid fa-chevron-up';
       } else {
         card.classList.add('hidden');
-        icon.className = 'fa-solid fa-chevron-down';
+        if (icon) icon.className = 'fa-solid fa-chevron-down';
       }
     }
 
@@ -380,6 +495,7 @@
       }
     }
     buildEmptyInventoryGrids();
+    initDefaultPassword();
 
     function selectBot(username) {
       selectedBot = username;
@@ -562,7 +678,10 @@
 
     function handleAddBot() {
       const username = document.getElementById('input-username').value.trim();
-      const password = document.getElementById('input-password').value.trim();
+      const useDefaultPass = document.getElementById('check-use-default-pass').checked;
+      const rawPassword = document.getElementById('input-password').value.trim();
+      const password = useDefaultPass ? defaultPassword : rawPassword;
+
       const host = document.getElementById('input-server-host').value.trim() || 'solaris.craftlandia.com.br';
       const port = parseInt(document.getElementById('input-server-port').value) || 25565;
       const macroType = document.getElementById('select-macro').value;
@@ -581,6 +700,18 @@
 
       if (!username) return;
 
+      // Salva ou atualiza a conta no localStorage
+      savedAccounts[username.toLowerCase()] = {
+        username,
+        useDefaultPassword: useDefaultPass,
+        password: useDefaultPass ? '' : password,
+        host,
+        port,
+        macroType,
+        proxy: proxyData
+      };
+      localStorage.setItem('cl_saved_accounts', JSON.stringify(savedAccounts));
+
       socket.emit('start_bot', {
         username,
         password,
@@ -591,7 +722,9 @@
       });
 
       document.getElementById('input-username').value = '';
-      document.getElementById('input-password').value = '';
+      if (!useDefaultPass) {
+        document.getElementById('input-password').value = '';
+      }
     }
 
     function handleTogglePause(username) {
@@ -602,8 +735,9 @@
       socket.emit('stop_bot', { username });
     }
 
-    function handleAdjustSwords(amount) {
-      socket.emit('adjust_used_swords', { amount });
+    function handleAdjustSwords(direction) {
+      const step = direction > 0 ? 1 : -1;
+      socket.emit('adjust_used_swords', { amount: step });
     }
 
     function handleResetSwords() {

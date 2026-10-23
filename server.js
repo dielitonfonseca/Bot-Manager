@@ -54,8 +54,10 @@ class SharedStateManager {
     broadcastSharedState();
   }
 
+  // Incremento e decremento estritamente de 1 em 1
   adjustUsedSwords(amount, author) {
-    this.usedSwordsCount = Math.max(0, this.usedSwordsCount + amount);
+    const step = amount > 0 ? 1 : -1;
+    this.usedSwordsCount = Math.max(0, this.usedSwordsCount + step);
     emitLog('SISTEMA', `Fila de espadas ajustada para ${this.usedSwordsCount} por ${author}.`, true);
     broadcastSharedState();
   }
@@ -74,6 +76,7 @@ const sharedState = new SharedStateManager();
 const activeBots = new Map();
 const activeMacros = new Map();
 const botMetas = new Map();
+const reconnectTimers = new Map(); // Controle de retentativas a cada 30s
 
 function emitLog(username, message, isSystem = false) {
   const time = new Date().toLocaleTimeString();
@@ -125,12 +128,41 @@ function emitInventoryData(username, bot) {
   io.emit('inventory_data', { username, slots });
 }
 
+function scheduleReconnect(username, botConfig) {
+  const meta = botMetas.get(username);
+  if (!meta || meta.manualDisconnect) return;
+
+  if (reconnectTimers.has(username)) {
+    clearTimeout(reconnectTimers.get(username));
+  }
+
+  meta.connected = false;
+  broadcastBotStatus(username);
+
+  emitLog(username, '⏳ Servidor indisponível ou reiniciando. Tentando reconectar em 30 segundos...');
+  const timer = setTimeout(() => {
+    reconnectTimers.delete(username);
+    const currentMeta = botMetas.get(username);
+    if (currentMeta && !currentMeta.manualDisconnect) {
+      emitLog(username, '🔄 Tentando reconexão periódica agora...');
+      createBotInstance(botConfig);
+    }
+  }, 30000);
+
+  reconnectTimers.set(username, timer);
+}
+
 function createBotInstance(botConfig) {
   const { username, password, host, port, macroType, proxy } = botConfig;
 
+  // Limpa instâncias ou sockets anteriores da mesma conta
   if (activeBots.has(username)) {
-    emitLog(username, 'Tentativa de criar bot duplicado. Abortado.');
-    return;
+    try { activeBots.get(username).quit(); } catch (e) {}
+    activeBots.delete(username);
+  }
+  if (activeMacros.has(username)) {
+    try { activeMacros.get(username).stop(); } catch (e) {}
+    activeMacros.delete(username);
   }
 
   const serverHost = host ? host.trim() : 'solaris.craftlandia.com.br';
@@ -146,7 +178,6 @@ function createBotInstance(botConfig) {
     checkTimeoutInterval: 45000
   };
 
-  // Configuração via Proxy SOCKS5 (se fornecido)
   if (proxy && proxy.host && proxy.port) {
     emitLog(username, `Configurando conexão via Proxy SOCKS5 ${proxy.host}:${proxy.port}...`);
     options.connect = (client) => {
@@ -171,6 +202,7 @@ function createBotInstance(botConfig) {
       socks.createConnection(socksOptions, (err, info) => {
         if (err) {
           emitLog(username, `❌ Erro na conexão via Proxy: ${err.message}`);
+          scheduleReconnect(username, botConfig);
           return;
         }
         client.setSocket(info.socket);
@@ -186,20 +218,25 @@ function createBotInstance(botConfig) {
     bot = mineflayer.createBot(options);
   } catch (err) {
     emitLog(username, `❌ Falha ao instanciar bot: ${err.message}`);
+    scheduleReconnect(username, botConfig);
     return;
   }
 
   const isVip = macroType === 'mob_vip';
-  const meta = {
+  const meta = botMetas.get(username) || {
     isVip,
     macroName: isVip ? 'Mata Mob (VIP)' : 'Mata Mob (Sem VIP)',
     paused: false,
     connected: false,
     password: password || null,
     spawned: false,
+    manualDisconnect: false,
     config: botConfig
   };
 
+  meta.manualDisconnect = false;
+  meta.connected = false;
+  meta.spawned = false;
   botMetas.set(username, meta);
   activeBots.set(username, bot);
 
@@ -214,27 +251,23 @@ function createBotInstance(botConfig) {
 
   activeMacros.set(username, macroInstance);
 
-  // Timeout de Handshake (15 segundos)
   const connectionTimeout = setTimeout(() => {
     if (!meta.connected) {
-      emitLog(username, '⚠️ Tempo de conexão esgotado (timeout de handshake). Reiniciando conexão...');
-      cleanupBot(username);
-      setTimeout(() => createBotInstance(botConfig), 3000);
+      emitLog(username, '⚠️ Timeout ao aguardar resposta do servidor.');
+      try { bot.quit(); } catch (e) {}
+      scheduleReconnect(username, botConfig);
     }
-  }, 15000);
+  }, 20000);
 
-  // Evento TCP Socket
   bot._client.once('connect', () => {
-    emitLog(username, '🔌 Socket TCP conectado. Enviando handshake de protocolo...');
+    emitLog(username, '🔌 Socket TCP conectado.');
   });
 
-  // Evento de Login no Protocolo
   bot.once('login', () => {
     clearTimeout(connectionTimeout);
-    emitLog(username, '🔑 Login inicial aceito pelo servidor. Carregando mundo...');
+    emitLog(username, '🔑 Autenticado. Aguardando spawn...');
   });
 
-  // Listener de Chat e Auto-Login
   bot.on('messagestr', (message) => {
     const raw = message.toString().trim();
     if (!raw) return;
@@ -255,14 +288,18 @@ function createBotInstance(botConfig) {
     }
   });
 
-  // Spawn no Mundo - Aqui sim o bot.inventory já foi inicializado pelo Mineflayer
   bot.once('spawn', () => {
+    clearTimeout(connectionTimeout);
+    if (reconnectTimers.has(username)) {
+      clearTimeout(reconnectTimers.get(username));
+      reconnectTimers.delete(username);
+    }
+
     meta.connected = true;
     meta.spawned = true;
-    emitLog(username, '✨ Spawn confirmado no mundo!');
+    emitLog(username, '✨ Spawn confirmado! Retomando rotina...');
     broadcastBotStatus(username);
 
-    // Registra listeners de inventário com segurança dentro do evento spawn
     if (bot.inventory) {
       bot.inventory.on('updateSlot', () => emitInventoryData(username, bot));
     }
@@ -284,17 +321,34 @@ function createBotInstance(botConfig) {
 
   bot.on('error', (err) => {
     clearTimeout(connectionTimeout);
-    emitLog(username, `Erro no bot: ${err.message}`);
+    emitLog(username, `Erro na conexão: ${err.message}`);
   });
 
   bot.on('end', () => {
     clearTimeout(connectionTimeout);
-    emitLog(username, 'Bot desconectado do servidor.');
-    cleanupBot(username);
+    emitLog(username, 'Conexão encerrada pelo servidor.');
+
+    if (activeMacros.has(username)) {
+      try { activeMacros.get(username).stop(); } catch (e) {}
+    }
+
+    if (!meta.manualDisconnect) {
+      scheduleReconnect(username, botConfig);
+    }
   });
 }
 
 function cleanupBot(username) {
+  const meta = botMetas.get(username);
+  if (meta) {
+    meta.manualDisconnect = true;
+  }
+
+  if (reconnectTimers.has(username)) {
+    clearTimeout(reconnectTimers.get(username));
+    reconnectTimers.delete(username);
+  }
+
   const macro = activeMacros.get(username);
   if (macro) {
     try { macro.stop(); } catch (e) {}
@@ -309,7 +363,7 @@ function cleanupBot(username) {
 
   botMetas.delete(username);
   io.emit('bot_removed', { username });
-  emitLog('SISTEMA', `Conta ${username} desvinculada.`, true);
+  emitLog('SISTEMA', `Conta ${username} desvinculada manualmente.`, true);
 }
 
 io.on('connection', (socket) => {
@@ -370,8 +424,10 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Incremento / Decremento rigoroso de 1 em 1
   socket.on('adjust_used_swords', ({ amount }) => {
-    sharedState.adjustUsedSwords(amount || 0, 'Painel Web');
+    const step = amount > 0 ? 1 : -1;
+    sharedState.adjustUsedSwords(step, 'Painel Web');
   });
 
   socket.on('reset_used_swords', () => {
