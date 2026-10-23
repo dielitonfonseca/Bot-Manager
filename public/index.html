@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Craftlandia Bot Manager - Painel Completo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    .inv-grid {
+      display: grid;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      gap: 3px;
+    }
+    .inv-slot {
+      aspect-ratio: 1 / 1;
+      background: #1e293b;
+      border: 1px solid #334155;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      transition: all 0.15s ease;
+    }
+    .inv-slot:hover {
+      border-color: #38bdf8;
+      background: #334155;
+      z-index: 10;
+    }
+    .slot-count {
+      position: absolute;
+      bottom: 1px;
+      right: 2px;
+      font-size: 10px;
+      font-weight: 800;
+      color: #ffffff;
+      text-shadow: 1px 1px 0px #000, -1px -1px 0px #000, 1px -1px 0px #000, -1px 1px 0px #000;
+      pointer-events: none;
+    }
+    .durability-bar {
+      position: absolute;
+      bottom: 2px;
+      left: 2px;
+      right: 2px;
+      height: 2px;
+      background: rgba(0, 0, 0, 0.7);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+    .durability-fill {
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+    .card-transition {
+      transition: max-height 0.25s ease-in-out, opacity 0.2s ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased p-4 lg:p-6">
+
+  <!-- Topbar com Métricas Globais e Controle de Espadas -->
+  <header class="max-w-[1750px] mx-auto mb-6 flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-xl font-bold border border-indigo-500/30 shadow-inner">
+        <i class="fa-solid fa-robot"></i>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+          CL Macro Manager <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Solaris 1.8.9</span>
+        </h1>
+        <p class="text-xs text-slate-400">Controle, monitoramento de proxy e rotações de espada</p>
+      </div>
+    </div>
+
+    <!-- Indicadores Globais -->
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-3">
+        <i class="fa-solid fa-coins text-amber-400 text-lg"></i>
+        <div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Lucro Estimado</div>
+          <div id="stat-total-profit" class="text-sm font-bold text-amber-400">0.00 Coins</div>
+        </div>
+      </div>
+      <div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-3">
+        <i class="fa-solid fa-screwdriver-wrench text-sky-400 text-lg"></i>
+        <div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Reparos Realizados</div>
+          <div id="stat-swords-repaired" class="text-sm font-bold text-sky-400">0</div>
+        </div>
+      </div>
+      
+      <!-- Controle Manual da Fila de Espadas -->
+      <div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-3">
+        <i class="fa-solid fa-hourglass-half text-rose-400 text-lg"></i>
+        <div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Espadas na Fila</div>
+          <div class="flex items-center gap-2">
+            <span id="stat-used-swords" class="text-sm font-bold text-rose-400">0</span>
+            <div class="flex items-center gap-1 ml-2">
+              <button onclick="handleAdjustSwords(-1)" class="w-5 h-5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded flex items-center justify-center text-xs" title="Diminuir 1">-</button>
+              <button onclick="handleAdjustSwords(1)" class="w-5 h-5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded flex items-center justify-center text-xs" title="Aumentar 1">+</button>
+              <button onclick="handleResetSwords()" class="w-5 h-5 bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 rounded flex items-center justify-center text-[10px]" title="Zerar Fila"><i class="fa-solid fa-rotate-left"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Layout Principal em Grid -->
+  <main class="max-w-[1750px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+    <!-- COLUNA DA ESQUERDA (4 colunas): Cadastro Completo, Contas e Inventário -->
+    <div class="lg:col-span-4 flex flex-col gap-6 w-full">
+
+      <!-- CARD 1: Cadastrar Nova Conta Completo (Com Senha, Host, Porta e Proxy) -->
+      <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
+        <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
+          <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
+            <i class="fa-solid fa-user-plus text-indigo-400"></i>
+            <span>Cadastrar Conta</span>
+          </div>
+          <button onclick="toggleCard('card-add-account', this)" class="text-slate-400 hover:text-white transition-colors p-1">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+        </div>
+        <div id="card-add-account" class="p-4 space-y-3 card-transition">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 mb-1">Nick do Jogador</label>
+              <input id="input-username" type="text" placeholder="FatalAmante" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 mb-1">Senha in-game</label>
+              <input id="input-password" type="password" placeholder="Senha do /login" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-3">
+            <div class="col-span-2">
+              <label class="block text-xs font-semibold text-slate-400 mb-1">Host Servidor</label>
+              <input id="input-server-host" type="text" value="solaris.craftlandia.com.br" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 mb-1">Porta</label>
+              <input id="input-server-port" type="number" value="25565" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 mb-1">Tipo de Macro</label>
+            <select id="select-macro" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+              <option value="mob_farmer">Mata Mob (Sem VIP - Troca em Baú)</option>
+              <option value="mob_vip">Mata Mob (VIP - Auto-Reparo & Suporte)</option>
+            </select>
+          </div>
+
+          <!-- Seção de Proxy SOCKS5 -->
+          <div class="pt-2 border-t border-slate-800/80">
+            <div class="flex items-center justify-between mb-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input id="check-use-proxy" type="checkbox" onchange="toggleProxyInputs(this.checked)" class="w-4 h-4 rounded bg-slate-950 border-slate-800 text-indigo-600 focus:ring-0 cursor-pointer">
+                <span class="text-xs font-semibold text-slate-300">Conectar via Proxy SOCKS5</span>
+              </label>
+            </div>
+
+            <div id="proxy-fields" class="space-y-2 hidden">
+              <div class="grid grid-cols-3 gap-2">
+                <div class="col-span-2">
+                  <input id="input-proxy-host" type="text" placeholder="IP / Host do Proxy" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                  <input id="input-proxy-port" type="number" placeholder="Porta" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <input id="input-proxy-user" type="text" placeholder="Usuário (opcional)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+                <input id="input-proxy-pass" type="password" placeholder="Senha (opcional)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+              </div>
+            </div>
+          </div>
+
+          <button onclick="handleAddBot()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
+            <i class="fa-solid fa-play text-xs"></i>
+            Conectar Conta
+          </button>
+        </div>
+      </section>
+
+      <!-- CARD 2: Contas Ativas -->
+      <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
+        <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
+          <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
+            <i class="fa-solid fa-users text-emerald-400"></i>
+            <span>Contas Ativas</span>
+            <span id="active-bots-count" class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 ml-1">0</span>
+          </div>
+          <button onclick="toggleCard('card-active-bots', this)" class="text-slate-400 hover:text-white transition-colors p-1">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+        </div>
+        <div id="card-active-bots" class="p-3 space-y-2 card-transition max-h-64 overflow-y-auto">
+          <div id="bots-list" class="space-y-2">
+            <div class="text-center py-6 text-xs text-slate-500">Nenhuma conta conectada no momento.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CARD 3: Inventário Gráfico Ajustado (Sem Espaço Vazio Excessivo) -->
+      <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
+        <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
+          <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
+            <i class="fa-solid fa-box-open text-amber-400"></i>
+            <span>Inventário</span>
+            <span id="inv-selected-bot" class="text-xs font-normal text-slate-400 ml-1">(Nenhum selecionado)</span>
+          </div>
+          <button onclick="toggleCard('card-inventory', this)" class="text-slate-400 hover:text-white transition-colors p-1">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+        </div>
+        <div id="card-inventory" class="p-3 card-transition flex flex-col gap-3">
+          <!-- Inventário Principal (3x9) -->
+          <div>
+            <div class="text-[10px] uppercase font-bold text-slate-400 mb-1.5 flex items-center justify-between">
+              <span>Principal (3x9)</span>
+              <span class="text-[10px] text-slate-500 font-medium">Slots 9 a 35</span>
+            </div>
+            <div id="inv-main-grid" class="inv-grid rounded-lg bg-slate-950 p-1.5 border border-slate-800/80"></div>
+          </div>
+
+          <!-- Hotbar (1x9) -->
+          <div>
+            <div class="text-[10px] uppercase font-bold text-slate-400 mb-1.5 flex items-center justify-between">
+              <span>Hotbar (1x9)</span>
+              <span class="text-[10px] text-slate-500 font-medium">Slots 36 a 44</span>
+            </div>
+            <div id="inv-hotbar-grid" class="inv-grid rounded-lg bg-slate-950 p-1.5 border border-slate-800/80"></div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- COLUNA DA DIREITA (8 colunas): Logs e Chat Ampliados -->
+    <div class="lg:col-span-8 flex flex-col gap-6 w-full">
+
+      <!-- CARD 4: Terminal de Logs com Filtro por Conta -->
+      <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col">
+        <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60 flex-wrap gap-2">
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
+              <i class="fa-solid fa-terminal text-sky-400"></i>
+              <span>Terminal de Logs</span>
+            </div>
+            <select id="select-log-account" onchange="handleLogFilterChange()" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-sky-400 font-medium focus:outline-none focus:border-sky-500">
+              <option value="all">Todas as Contas (Geral)</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="clearLogs()" class="text-xs text-slate-400 hover:text-rose-400 px-2 py-1 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors">
+              <i class="fa-solid fa-trash-can mr-1"></i>Limpar
+            </button>
+            <button onclick="toggleCard('card-logs', this)" class="text-slate-400 hover:text-white transition-colors p-1">
+              <i class="fa-solid fa-chevron-up"></i>
+            </button>
+          </div>
+        </div>
+        <div id="card-logs" class="card-transition flex-1">
+          <div id="logs-container" class="h-80 lg:h-96 bg-slate-950 p-3 font-mono text-xs overflow-y-auto space-y-1 text-slate-300 border-t border-slate-900">
+            <div class="text-slate-600">// Terminal aguardando eventos do servidor...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CARD 5: Chat Isolado por Conta -->
+      <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col">
+        <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60 flex-wrap gap-2">
+          <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
+            <i class="fa-solid fa-comments text-indigo-400"></i>
+            <span>Chat da Conta:</span>
+            <span id="chat-active-account" class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-semibold border border-indigo-500/20">Selecione uma conta</span>
+          </div>
+          <button onclick="toggleCard('card-chat', this)" class="text-slate-400 hover:text-white transition-colors p-1">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+        </div>
+        <div id="card-chat" class="card-transition flex-1 flex flex-col">
+          <div id="chat-messages-container" class="h-64 lg:h-72 bg-slate-950 p-3 font-mono text-xs overflow-y-auto space-y-1.5 text-slate-300">
+            <div class="text-slate-600">// Selecione uma conta na lista à esquerda para interagir no chat.</div>
+          </div>
+          <form onsubmit="handleSendChat(event)" class="p-3 border-t border-slate-800 bg-slate-900 flex gap-2">
+            <input id="input-chat-message" type="text" placeholder="Digite uma mensagem ou comando (ex: /money)..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-md flex items-center gap-1.5">
+              <i class="fa-solid fa-paper-plane"></i>
+              Enviar
+            </button>
+          </form>
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <script>
+    const socket = io();
+
+    let selectedBot = null;
+    let botsMap = new Map();
+    let logsHistory = [];
+    let chatsHistory = new Map();
+
+  const ITEM_ICONS = {
+      diamond_sword: '<img src="/icons/sword.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow">',
+      iron_sword: '<img src="/icons/sword.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow opacity-75">',
+      golden_sword: '<img src="/icons/sword.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow">',
+      stone_sword: '<img src="/icons/sword.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow opacity-60">',
+      diamond_block: '<img src="/icons/block_diamond.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow">',
+      leather: '<img src="/icons/leather.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow">',
+      cooked_beef: '<img src="/icons/steak.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow">',
+      beef: '<img src="/icons/steak.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow">',
+      steak: '<img src="/icons/steak.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow">'
+    };
+
+    function toggleProxyInputs(show) {
+      const container = document.getElementById('proxy-fields');
+      if (show) {
+        container.classList.remove('hidden');
+      } else {
+        container.classList.add('hidden');
+      }
+    }
+
+    function toggleCard(cardId, btn) {
+      const card = document.getElementById(cardId);
+      const icon = btn.querySelector('i');
+      if (card.classList.contains('hidden')) {
+        card.classList.remove('hidden');
+        icon.className = 'fa-solid fa-chevron-up';
+      } else {
+        card.classList.add('hidden');
+        icon.className = 'fa-solid fa-chevron-down';
+      }
+    }
+
+    function buildEmptyInventoryGrids() {
+      const mainGrid = document.getElementById('inv-main-grid');
+      const hotbarGrid = document.getElementById('inv-hotbar-grid');
+      mainGrid.innerHTML = '';
+      hotbarGrid.innerHTML = '';
+
+      for (let i = 9; i <= 35; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'inv-slot rounded-md';
+        slot.id = `slot-${i}`;
+        mainGrid.appendChild(slot);
+      }
+
+      for (let i = 36; i <= 44; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'inv-slot rounded-md';
+        slot.id = `slot-${i}`;
+        hotbarGrid.appendChild(slot);
+      }
+    }
+    buildEmptyInventoryGrids();
+
+    function selectBot(username) {
+      selectedBot = username;
+      document.getElementById('inv-selected-bot').innerText = `(${username})`;
+      document.getElementById('chat-active-account').innerText = username;
+      
+      renderBotsList();
+      renderCurrentChat();
+      
+      socket.emit('request_inventory', { username });
+    }
+
+    function renderBotsList() {
+      const list = document.getElementById('bots-list');
+      const selectLog = document.getElementById('select-log-account');
+      const countEl = document.getElementById('active-bots-count');
+      
+      countEl.innerText = botsMap.size;
+      list.innerHTML = '';
+
+      const currentSelectedLog = selectLog.value;
+      selectLog.innerHTML = '<option value="all">Todas as Contas (Geral)</option>';
+
+      if (botsMap.size === 0) {
+        list.innerHTML = '<div class="text-center py-6 text-xs text-slate-500">Nenhuma conta conectada no momento.</div>';
+        return;
+      }
+
+      botsMap.forEach((bot, user) => {
+        const opt = document.createElement('option');
+        opt.value = user;
+        opt.innerText = user;
+        selectLog.appendChild(opt);
+
+        const isSelected = selectedBot === user;
+        const item = document.createElement('div');
+        item.className = `p-3 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
+          isSelected 
+            ? 'bg-indigo-950/40 border-indigo-500/50 shadow-sm' 
+            : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+        }`;
+        item.onclick = () => selectBot(user);
+
+        item.innerHTML = `
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg ${bot.isVip ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-300'} flex items-center justify-center font-bold text-xs">
+              ${bot.isVip ? 'VIP' : 'NAO'}
+            </div>
+            <div>
+              <div class="text-sm font-semibold text-white flex items-center gap-1.5">
+                ${user}
+                <span class="w-2 h-2 rounded-full ${bot.connected ? 'bg-emerald-500' : 'bg-rose-500'}"></span>
+              </div>
+              <div class="text-[11px] text-slate-400">${bot.macroName || 'Aguardando'}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="event.stopPropagation(); handleTogglePause('${user}')" class="p-1.5 text-xs rounded-lg border border-slate-800 text-slate-300 hover:bg-slate-800" title="${bot.paused ? 'Retomar' : 'Pausar'}">
+              <i class="fa-solid ${bot.paused ? 'fa-play text-emerald-400' : 'fa-pause text-amber-400'}"></i>
+            </button>
+            <button onclick="event.stopPropagation(); handleDisconnectBot('${user}')" class="p-1.5 text-xs rounded-lg border border-slate-800 text-slate-300 hover:bg-rose-500/20 hover:text-rose-400" title="Desconectar">
+              <i class="fa-solid fa-power-off"></i>
+            </button>
+          </div>
+        `;
+        list.appendChild(item);
+      });
+
+      selectLog.value = currentSelectedLog;
+    }
+
+    function handleLogFilterChange() {
+      renderLogs();
+    }
+
+    function renderLogs() {
+      const container = document.getElementById('logs-container');
+      const filter = document.getElementById('select-log-account').value;
+      container.innerHTML = '';
+
+      const filtered = filter === 'all' 
+        ? logsHistory 
+        : logsHistory.filter(l => l.username === filter || l.isSystem);
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="text-slate-600">// Nenhum log registrado para este filtro.</div>';
+        return;
+      }
+
+      filtered.forEach(log => {
+        const div = document.createElement('div');
+        div.className = 'leading-relaxed break-all';
+        div.innerHTML = `<span class="text-slate-500">[${log.time}]</span> <span class="font-semibold text-indigo-400">${log.username ? log.username : 'SISTEMA'}:</span> <span class="text-slate-200">${log.message}</span>`;
+        container.appendChild(div);
+      });
+
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function clearLogs() {
+      logsHistory = [];
+      renderLogs();
+    }
+
+    function renderCurrentChat() {
+      const container = document.getElementById('chat-messages-container');
+      container.innerHTML = '';
+
+      if (!selectedBot) {
+        container.innerHTML = '<div class="text-slate-600">// Selecione uma conta na lista à esquerda para interagir no chat.</div>';
+        return;
+      }
+
+      const msgs = chatsHistory.get(selectedBot) || [];
+      if (msgs.length === 0) {
+        container.innerHTML = `<div class="text-slate-600">// Nenhum chat recebido para ${selectedBot}.</div>`;
+        return;
+      }
+
+      msgs.forEach(c => {
+        const div = document.createElement('div');
+        div.className = 'leading-relaxed break-all';
+        div.innerHTML = `<span class="text-slate-500">[${c.time}]</span> <span class="text-slate-200">${c.text}</span>`;
+        container.appendChild(div);
+      });
+
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function updateInventoryDisplay(slots) {
+      buildEmptyInventoryGrids();
+      if (!slots || !Array.isArray(slots)) return;
+
+      slots.forEach(slotData => {
+        if (!slotData) return;
+        const slotEl = document.getElementById(`slot-${slotData.slot}`);
+        if (!slotEl) return;
+
+        const iconHtml = ITEM_ICONS[slotData.name] || `<span class="text-[10px] text-slate-400 uppercase font-bold">${slotData.name.slice(0, 3)}</span>`;
+        slotEl.innerHTML = iconHtml;
+
+        if (slotData.count > 1) {
+          const countEl = document.createElement('span');
+          countEl.className = 'slot-count';
+          countEl.innerText = slotData.count;
+          slotEl.appendChild(countEl);
+        }
+
+        if (slotData.name.includes('sword') || slotData.durabilityUsed !== undefined) {
+          const maxDur = 1561;
+          const damage = slotData.durabilityUsed || 0;
+          const remaining = Math.max(0, maxDur - damage);
+          const percent = Math.min(100, Math.max(0, (remaining / maxDur) * 100));
+
+          let barColor = '#10b981';
+          if (percent < 30) barColor = '#ef4444';
+          else if (percent < 60) barColor = '#f59e0b';
+
+          const durBar = document.createElement('div');
+          durBar.className = 'durability-bar';
+          durBar.innerHTML = `<div class="durability-fill" style="width: ${percent}%; background: ${barColor};"></div>`;
+          slotEl.appendChild(durBar);
+
+          slotEl.title = `${slotData.name} (${remaining}/${maxDur})`;
+        } else {
+          slotEl.title = `${slotData.name} (${slotData.count})`;
+        }
+      });
+    }
+
+    function handleSendChat(e) {
+      e.preventDefault();
+      const input = document.getElementById('input-chat-message');
+      const text = input.value.trim();
+      if (!text || !selectedBot) return;
+
+      socket.emit('bot_chat', { username: selectedBot, message: text });
+      input.value = '';
+    }
+
+    function handleAddBot() {
+      const username = document.getElementById('input-username').value.trim();
+      const password = document.getElementById('input-password').value.trim();
+      const host = document.getElementById('input-server-host').value.trim() || 'solaris.craftlandia.com.br';
+      const port = parseInt(document.getElementById('input-server-port').value) || 25565;
+      const macroType = document.getElementById('select-macro').value;
+
+      const useProxy = document.getElementById('check-use-proxy').checked;
+      let proxyData = null;
+
+      if (useProxy) {
+        proxyData = {
+          host: document.getElementById('input-proxy-host').value.trim(),
+          port: parseInt(document.getElementById('input-proxy-port').value),
+          user: document.getElementById('input-proxy-user').value.trim() || undefined,
+          pass: document.getElementById('input-proxy-pass').value.trim() || undefined
+        };
+      }
+
+      if (!username) return;
+
+      socket.emit('start_bot', {
+        username,
+        password,
+        host,
+        port,
+        macroType,
+        proxy: proxyData
+      });
+
+      document.getElementById('input-username').value = '';
+      document.getElementById('input-password').value = '';
+    }
+
+    function handleTogglePause(username) {
+      socket.emit('toggle_pause', { username });
+    }
+
+    function handleDisconnectBot(username) {
+      socket.emit('stop_bot', { username });
+    }
+
+    function handleAdjustSwords(amount) {
+      socket.emit('adjust_used_swords', { amount });
+    }
+
+    function handleResetSwords() {
+      socket.emit('reset_used_swords');
+    }
+
+    socket.on('init_state', (data) => {
+      if (data.sharedState) {
+        document.getElementById('stat-total-profit').innerText = `${data.sharedState.totalProfit.toFixed(2)} Coins`;
+        document.getElementById('stat-swords-repaired').innerText = data.sharedState.repairedSwordsCount;
+        document.getElementById('stat-used-swords').innerText = data.sharedState.usedSwordsCount;
+      }
+      if (data.activeBots) {
+        botsMap.clear();
+        data.activeBots.forEach(b => botsMap.set(b.username, b));
+        renderBotsList();
+      }
+    });
+
+    socket.on('state_update', (sharedState) => {
+      document.getElementById('stat-total-profit').innerText = `${sharedState.totalProfit.toFixed(2)} Coins`;
+      document.getElementById('stat-swords-repaired').innerText = sharedState.repairedSwordsCount;
+      document.getElementById('stat-used-swords').innerText = sharedState.usedSwordsCount;
+    });
+
+    socket.on('bot_status', (botData) => {
+      botsMap.set(botData.username, botData);
+      renderBotsList();
+      if (!selectedBot) selectBot(botData.username);
+    });
+
+    socket.on('bot_removed', ({ username }) => {
+      botsMap.delete(username);
+      if (selectedBot === username) {
+        selectedBot = null;
+        document.getElementById('inv-selected-bot').innerText = '(Nenhum selecionado)';
+        document.getElementById('chat-active-account').innerText = 'Selecione uma conta';
+        buildEmptyInventoryGrids();
+      }
+      renderBotsList();
+      renderCurrentChat();
+    });
+
+    socket.on('log_message', (log) => {
+      logsHistory.push(log);
+      if (logsHistory.length > 500) logsHistory.shift();
+      renderLogs();
+    });
+
+    socket.on('bot_chat_message', ({ username, message, time }) => {
+      if (!chatsHistory.has(username)) chatsHistory.set(username, []);
+      const userChats = chatsHistory.get(username);
+      userChats.push({ text: message, time: time || new Date().toLocaleTimeString() });
+      if (userChats.length > 200) userChats.shift();
+
+      if (selectedBot === username) {
+        renderCurrentChat();
+      }
+    });
+
+    socket.on('inventory_data', ({ username, slots }) => {
+      if (selectedBot === username) {
+        updateInventoryDisplay(slots);
+      }
+    });
+  </script>
+</body>
+</html>

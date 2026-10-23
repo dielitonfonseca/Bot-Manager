@@ -1,0 +1,19 @@
+{
+  "name": "craftlandia-bot-manager",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "dev:bot": "npx nodemon --watch server.js --watch macros/ --ignore public/ --ignore accounts.json --delay 1.5 server.js",
+    "dev:web": "npx browser-sync start --proxy \"localhost:3000\" --port 3002 --files \"public/**/*\" --no-notify",
+    "dev": "npx concurrently -k -n \"BOT,WEB\" -c \"cyan,magenta\" \"npm run dev:bot\" \"npm run dev:web\""
+  },
+  "dependencies": {
+    "mineflayer": "^4.20.0"
+  },
+  "devDependencies": {
+    "browser-sync": "^3.0.0",
+    "concurrently": "^9.0.0",
+    "nodemon": "^3.1.14"
+  }
+}

@@ -1,0 +1,44 @@
+[
+  {
+    "username": "Fatal",
+    "password": "fatalisback26",
+    "serverHost": "solaris.craftlandia.com.br",
+    "serverPort": 25565,
+    "selectedMacro": "mob_vip",
+    "proxy": {
+      "enabled": false,
+      "host": "",
+      "port": 1080,
+      "username": "",
+      "password": ""
+    }
+  },
+  {
+    "username": "FatalAmante",
+    "password": "fatalisback26",
+    "serverHost": "solaris.craftlandia.com.br",
+    "serverPort": 25565,
+    "selectedMacro": "mob_farmer",
+    "proxy": {
+      "enabled": false,
+      "host": "",
+      "port": 1080,
+      "username": "",
+      "password": ""
+    }
+  },
+  {
+    "username": "FatalAmante2",
+    "password": "fatalisback26",
+    "serverHost": "solaris.craftlandia.com.br",
+    "serverPort": 25565,
+    "selectedMacro": "mob_farmer",
+    "proxy": {
+      "enabled": false,
+      "host": "",
+      "port": 1080,
+      "username": "",
+      "password": ""
+    }
+  }
+]
