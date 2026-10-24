@@ -74,7 +74,7 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased p-4 lg:p-6">
 
-  <!-- Topbar com Métricas Globais e Controle de Espadas -->
+  <!-- Topbar com Métricas Globais e Controlo de Espadas -->
   <header class="max-w-[1750px] mx-auto mb-6 flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
     <div class="flex items-center gap-3">
       <div class="w-11 h-11 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-xl font-bold border border-indigo-500/30 shadow-inner">
@@ -84,7 +84,7 @@
         <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
           CL Macro Manager <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Solaris 1.8.9</span>
         </h1>
-        <p class="text-xs text-slate-400">Controle, monitoramento de proxy e rotações de espada</p>
+        <p class="text-xs text-slate-400">Controlo, monitorização de proxy e rotações de espada</p>
       </div>
     </div>
 
@@ -94,7 +94,7 @@
         <i class="fa-solid fa-coins text-amber-400 text-lg"></i>
         <div>
           <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Lucro Estimado</div>
-          <div id="stat-total-profit" class="text-sm font-bold text-amber-400">0.00 Coins</div>
+          <div id="stat-total-profit" class="text-sm font-bold text-amber-400">0k</div>
         </div>
       </div>
       <div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-3">
@@ -105,7 +105,7 @@
         </div>
       </div>
       
-      <!-- Controle Manual da Fila de Espadas -->
+      <!-- Controlo Manual da Fila de Espadas -->
       <div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-3">
         <i class="fa-solid fa-hourglass-half text-rose-400 text-lg"></i>
         <div>
@@ -129,12 +129,12 @@
     <!-- COLUNA DA ESQUERDA (4 colunas): Cadastro Completo, Contas e Inventário -->
     <div class="lg:col-span-4 flex flex-col gap-6 w-full">
 
-      <!-- CARD 1: Cadastrar Nova Conta -->
+      <!-- CARD 1: Registar Nova Conta -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
           <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
             <i class="fa-solid fa-user-plus text-indigo-400"></i>
-            <span>Cadastrar Conta</span>
+            <span>Registar Conta</span>
           </div>
           <button onclick="toggleCard('card-add-account', this)" class="text-slate-400 hover:text-white transition-colors p-1">
             <i class="fa-solid fa-chevron-up"></i>
@@ -163,11 +163,12 @@
             </div>
           </div>
 
-          <!-- Campos Nick e Senha com Checkbox de Senha Padrão -->
+          <!-- Campos Nick (com Datalist Dropdown) e Senha -->
           <div class="space-y-2">
             <div>
               <label class="block text-xs font-semibold text-slate-400 mb-1">Nick do Jogador</label>
-              <input id="input-username" type="text" oninput="handleNickInput(this.value)" placeholder="FatalAmante" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+              <input id="input-username" list="saved-nicks-list" type="text" oninput="handleNickInput(this.value)" placeholder="Digite ou selecione uma conta..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500" autocomplete="off">
+              <datalist id="saved-nicks-list"></datalist>
             </div>
 
             <div>
@@ -201,7 +202,7 @@
             </select>
           </div>
 
-          <!-- Seção de Proxy SOCKS5 -->
+          <!-- Secção de Proxy SOCKS5 -->
           <div class="pt-2 border-t border-slate-800/80">
             <div class="flex items-center justify-between mb-2">
               <label class="flex items-center gap-2 cursor-pointer">
@@ -220,7 +221,7 @@
                 </div>
               </div>
               <div class="grid grid-cols-2 gap-2">
-                <input id="input-proxy-user" type="text" placeholder="Usuário (opcional)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+                <input id="input-proxy-user" type="text" placeholder="Utilizador (opcional)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
                 <input id="input-proxy-pass" type="password" placeholder="Senha (opcional)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
               </div>
             </div>
@@ -228,12 +229,12 @@
 
           <button onclick="handleAddBot()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
             <i class="fa-solid fa-play text-xs"></i>
-            Conectar Conta
+            Conectar / Salvar Conta
           </button>
         </div>
       </section>
 
-      <!-- CARD 2: Contas Ativas -->
+      <!-- CARD 2: Contas Ativas (Persistentes com Excluir) -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
           <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
@@ -245,9 +246,9 @@
             <i class="fa-solid fa-chevron-up"></i>
           </button>
         </div>
-        <div id="card-active-bots" class="p-3 space-y-2 card-transition max-h-64 overflow-y-auto">
+        <div id="card-active-bots" class="p-3 space-y-2 card-transition max-h-72 overflow-y-auto">
           <div id="bots-list" class="space-y-2">
-            <div class="text-center py-6 text-xs text-slate-500">Nenhuma conta conectada no momento.</div>
+            <div class="text-center py-6 text-xs text-slate-500">Nenhuma conta cadastrada no momento.</div>
           </div>
         </div>
       </section>
@@ -285,7 +286,7 @@
 
     </div>
 
-    <!-- COLUNA DA DIREITA (8 colunas): Logs e Chat Ampliados -->
+    <!-- COLUNA DA DIREITA (8 colunas): Logs, Chat e os 2 Cards Inferiores -->
     <div class="lg:col-span-8 flex flex-col gap-6 w-full">
 
       <!-- CARD 4: Terminal de Logs com Filtro por Conta -->
@@ -342,6 +343,100 @@
         </div>
       </section>
 
+      <!-- SECÇÃO INFERIOR: Cards de Métricas e Estoque -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+
+        <!-- CARD VERMELHO: Rendimentos em k/kk & Estoque -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col justify-between">
+          <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
+            <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
+              <i class="fa-solid fa-chart-pie text-rose-400"></i>
+              <span>Métricas Gerais & Estoque</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="handleTransferAllToFatal()" class="text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 shadow-sm" title="Transfere o saldo de todas as contas para Fatal">
+                <i class="fa-solid fa-money-bill-transfer"></i>
+                Transferir Tudo
+              </button>
+              <button onclick="toggleCard('card-metrics-global', this)" class="text-slate-400 hover:text-white transition-colors p-1">
+                <i class="fa-solid fa-chevron-up"></i>
+              </button>
+            </div>
+          </div>
+          <div id="card-metrics-global" class="p-4 space-y-4 card-transition flex-1 flex flex-col justify-between">
+            <div class="grid grid-cols-2 gap-3">
+              <div class="bg-slate-950 border border-slate-800/90 rounded-xl p-3 flex flex-col justify-center">
+                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total em Mãos (Todas)</span>
+                <span id="metric-total-money-all" class="text-base font-extrabold text-emerald-400 mt-0.5">0k</span>
+              </div>
+              <div class="bg-slate-950 border border-slate-800/90 rounded-xl p-3 flex flex-col justify-center">
+                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Baú de Diamante Atual</span>
+                <div class="flex items-baseline gap-1.5 mt-0.5">
+                  <span id="metric-diamond-chest" class="text-sm font-bold text-cyan-400">diamante1</span>
+                  <span id="metric-diamond-packs" class="text-xs text-slate-400 font-medium">(~0.0 packs)</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                <span>Rendimento Arrecadado (24h)</span>
+                <span class="text-[10px] text-slate-500 font-normal">Soma contínua</span>
+              </div>
+              <div id="metrics-accounts-list" class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                <div class="text-xs text-slate-600 italic py-2 text-center">Nenhum rendimento registrado nas últimas 24h...</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CARD AMARELO: Performance (Conta Selecionada ou Todas) -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col justify-between">
+          <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
+            <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
+              <i class="fa-solid fa-chart-line text-amber-400"></i>
+              <span>Performance: <span id="perf-target-account" class="text-amber-400 font-bold text-xs ml-1">Todas</span></span>
+            </div>
+            <button onclick="toggleCard('card-metrics-selected', this)" class="text-slate-400 hover:text-white transition-colors p-1">
+              <i class="fa-solid fa-chevron-up"></i>
+            </button>
+          </div>
+          <div id="card-metrics-selected" class="p-4 space-y-4 card-transition flex-1 flex flex-col justify-between">
+            <div class="grid grid-cols-3 gap-2.5">
+              <div class="bg-slate-950 border border-slate-800/90 rounded-xl p-3 flex flex-col justify-center">
+                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Saldo em Mãos</span>
+                <span id="perf-current-money" class="text-sm font-extrabold text-white mt-1">0k</span>
+              </div>
+              <div class="bg-slate-950 border border-slate-800/90 rounded-xl p-3 flex flex-col justify-center">
+                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Hoje (24h)</span>
+                <span id="perf-today-money" class="text-sm font-extrabold text-amber-400 mt-1">0k</span>
+              </div>
+              <div class="bg-slate-950 border border-slate-800/90 rounded-xl p-3 flex flex-col justify-center">
+                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Média por Hora</span>
+                <span id="perf-hourly-money" class="text-sm font-extrabold text-sky-400 mt-1">0k/h</span>
+              </div>
+            </div>
+
+            <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold">
+                  <i class="fa-solid fa-bolt"></i>
+                </div>
+                <div>
+                  <div class="font-bold text-slate-200">Status de Atividade</div>
+                  <div id="perf-session-time" class="text-[11px] text-slate-400">Tempo de sessão: 0m</div>
+                </div>
+              </div>
+              <button onclick="handleTransferSelectedToFatal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 shadow-sm">
+                <i class="fa-solid fa-paper-plane text-[10px]"></i>
+                Transferir Saldo
+              </button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
     </div>
 
   </main>
@@ -354,11 +449,30 @@
     let logsHistory = [];
     let chatsHistory = new Map();
 
-    // Banco de contas salvas no localStorage
     let savedAccounts = JSON.parse(localStorage.getItem('cl_saved_accounts') || '{}');
     let defaultPassword = localStorage.getItem('cl_default_password') || '';
 
-    // Mapeamento dos itens locais para public/icons
+    let accountStats = new Map();
+    let diamondStockData = { home: 'diamante1', packs: 0 };
+
+    // Formatação monetária estrita em k e kk
+    function formatCoinsCompact(val) {
+      const num = Number(val) || 0;
+      if (num < 1000) {
+        return '0k';
+      }
+      if (num >= 1000000) {
+        const millions = num / 1000000;
+        let formatted = millions.toFixed(1).replace('.', ',');
+        if (formatted.endsWith(',0')) {
+          formatted = formatted.slice(0, -2);
+        }
+        return `${formatted}kk`;
+      }
+      const thousands = Math.floor(num / 1000);
+      return `${thousands}k`;
+    }
+
     const ITEM_ICONS = {
       diamond_sword: '<img src="/icons/sword.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow">',
       iron_sword: '<img src="/icons/sword.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow opacity-75">',
@@ -371,7 +485,6 @@
       steak: '<img src="/icons/steak.png" class="w-6 h-6 object-contain pointer-events-none drop-shadow">'
     };
 
-    // Inicialização da Senha Padrão
     function initDefaultPassword() {
       const inputDef = document.getElementById('input-default-password');
       if (defaultPassword) {
@@ -388,7 +501,7 @@
         document.getElementById('input-password').value = defaultPassword;
       }
 
-      alert('Senha padrão salva com sucesso no navegador!');
+      alert('Senha padrão salva com sucesso!');
     }
 
     function toggleUseDefaultPassword(useDefault) {
@@ -403,19 +516,29 @@
       }
     }
 
-    // Identifica nick já existente e aplica as preferências salvas
+    // Atualiza o dropdown (<datalist>) com os nicks guardados
+    function updateSavedNicksDropdown() {
+      const datalist = document.getElementById('saved-nicks-list');
+      if (!datalist) return;
+      datalist.innerHTML = '';
+
+      Object.values(savedAccounts).forEach(acc => {
+        const option = document.createElement('option');
+        option.value = acc.username;
+        datalist.appendChild(option);
+      });
+    }
+
     function handleNickInput(nick) {
       const cleanNick = nick.trim();
       if (!cleanNick) return;
 
       const accountData = savedAccounts[cleanNick.toLowerCase()];
       if (accountData) {
-        // Seleciona automaticamente a macro associada a este nick
         if (accountData.macroType) {
           document.getElementById('select-macro').value = accountData.macroType;
         }
 
-        // Se a conta usava senha padrão
         if (accountData.useDefaultPassword) {
           document.getElementById('check-use-default-pass').checked = true;
           toggleUseDefaultPassword(true);
@@ -425,11 +548,9 @@
           document.getElementById('input-password').value = accountData.password;
         }
 
-        // Preenche host e porta se salvos
         if (accountData.host) document.getElementById('input-server-host').value = accountData.host;
         if (accountData.port) document.getElementById('input-server-port').value = accountData.port;
 
-        // Preenche proxy se salvo
         if (accountData.proxy) {
           document.getElementById('check-use-proxy').checked = true;
           toggleProxyInputs(true);
@@ -441,7 +562,6 @@
       }
     }
 
-    // Salva a associação do macro ao nick digitado
     function handleMacroChange() {
       const nick = document.getElementById('input-username').value.trim();
       const macro = document.getElementById('select-macro').value;
@@ -496,16 +616,25 @@
     }
     buildEmptyInventoryGrids();
     initDefaultPassword();
+    updateSavedNicksDropdown();
 
+    // Toggle de seleção: clicar na conta ativa remove a seleção para voltar para 'Todas'
     function selectBot(username) {
-      selectedBot = username;
-      document.getElementById('inv-selected-bot').innerText = `(${username})`;
-      document.getElementById('chat-active-account').innerText = username;
+      if (selectedBot === username) {
+        selectedBot = null;
+        document.getElementById('inv-selected-bot').innerText = '(Nenhum selecionado)';
+        document.getElementById('chat-active-account').innerText = 'Selecione uma conta';
+        buildEmptyInventoryGrids();
+      } else {
+        selectedBot = username;
+        document.getElementById('inv-selected-bot').innerText = `(${username})`;
+        document.getElementById('chat-active-account').innerText = username;
+        socket.emit('request_inventory', { username });
+      }
       
       renderBotsList();
       renderCurrentChat();
-      
-      socket.emit('request_inventory', { username });
+      updateMetricsDisplay();
     }
 
     function renderBotsList() {
@@ -513,18 +642,26 @@
       const selectLog = document.getElementById('select-log-account');
       const countEl = document.getElementById('active-bots-count');
       
-      countEl.innerText = botsMap.size;
+      const allSavedKeys = Object.keys(savedAccounts);
+      countEl.innerText = allSavedKeys.length;
       list.innerHTML = '';
 
       const currentSelectedLog = selectLog.value;
       selectLog.innerHTML = '<option value="all">Todas as Contas (Geral)</option>';
 
-      if (botsMap.size === 0) {
-        list.innerHTML = '<div class="text-center py-6 text-xs text-slate-500">Nenhuma conta conectada no momento.</div>';
+      if (allSavedKeys.length === 0) {
+        list.innerHTML = '<div class="text-center py-6 text-xs text-slate-500">Nenhuma conta cadastrada no momento.</div>';
         return;
       }
 
-      botsMap.forEach((bot, user) => {
+      allSavedKeys.forEach((key) => {
+        const acc = savedAccounts[key];
+        const user = acc.username;
+        const liveBot = botsMap.get(user);
+        const isOnline = liveBot && liveBot.connected;
+        const isPaused = liveBot && liveBot.paused;
+        const isVip = acc.macroType === 'mob_vip';
+
         const opt = document.createElement('option');
         opt.value = user;
         opt.innerText = user;
@@ -541,23 +678,26 @@
 
         item.innerHTML = `
           <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg ${bot.isVip ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-300'} flex items-center justify-center font-bold text-xs">
-              ${bot.isVip ? 'VIP' : 'NAO'}
+            <div class="w-8 h-8 rounded-lg ${isVip ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-300'} flex items-center justify-center font-bold text-xs">
+              ${isVip ? 'VIP' : 'NAO'}
             </div>
             <div>
               <div class="text-sm font-semibold text-white flex items-center gap-1.5">
                 ${user}
-                <span class="w-2 h-2 rounded-full ${bot.connected ? 'bg-emerald-500' : 'bg-rose-500'}"></span>
+                <span class="w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-600'}"></span>
               </div>
-              <div class="text-[11px] text-slate-400">${bot.macroName || 'Aguardando'}</div>
+              <div class="text-[11px] text-slate-400">${isOnline ? (liveBot.macroName || 'Ativo') : 'Desconectado'}</div>
             </div>
           </div>
           <div class="flex items-center gap-1.5">
-            <button onclick="event.stopPropagation(); handleTogglePause('${user}')" class="p-1.5 text-xs rounded-lg border border-slate-800 text-slate-300 hover:bg-slate-800" title="${bot.paused ? 'Retomar' : 'Pausar'}">
-              <i class="fa-solid ${bot.paused ? 'fa-play text-emerald-400' : 'fa-pause text-amber-400'}"></i>
+            <button onclick="event.stopPropagation(); handleTogglePause('${user}')" class="p-1.5 text-xs rounded-lg border border-slate-800 text-slate-300 hover:bg-slate-800" title="${isPaused ? 'Retomar' : 'Pausar'}">
+              <i class="fa-solid ${isPaused ? 'fa-play text-emerald-400' : 'fa-pause text-amber-400'}"></i>
             </button>
-            <button onclick="event.stopPropagation(); handleDisconnectBot('${user}')" class="p-1.5 text-xs rounded-lg border border-slate-800 text-slate-300 hover:bg-rose-500/20 hover:text-rose-400" title="Desconectar">
-              <i class="fa-solid fa-power-off"></i>
+            <button onclick="event.stopPropagation(); handleDisconnectBot('${user}')" class="p-1.5 text-xs rounded-lg border border-slate-800 text-slate-300 hover:bg-rose-500/20 hover:text-rose-400" title="${isOnline ? 'Desconectar' : 'Conectar'}">
+              <i class="fa-solid fa-power-off ${isOnline ? 'text-rose-400' : 'text-slate-500'}"></i>
+            </button>
+            <button onclick="event.stopPropagation(); handleDeleteAccount('${user}')" class="p-1.5 text-xs rounded-lg border border-slate-800 text-slate-400 hover:bg-rose-950/40 hover:text-rose-400 hover:border-rose-900" title="Excluir Conta Permanentemente">
+              <i class="fa-solid fa-trash-can"></i>
             </button>
           </div>
         `;
@@ -565,6 +705,26 @@
       });
 
       selectLog.value = currentSelectedLog;
+    }
+
+    function handleDeleteAccount(username) {
+      if (!confirm(`Deseja realmente excluir a conta ${username} do gerenciador?`)) return;
+
+      socket.emit('stop_bot', { username });
+
+      delete savedAccounts[username.toLowerCase()];
+      localStorage.setItem('cl_saved_accounts', JSON.stringify(savedAccounts));
+
+      if (selectedBot === username) {
+        selectedBot = null;
+        document.getElementById('inv-selected-bot').innerText = '(Nenhum selecionado)';
+        document.getElementById('chat-active-account').innerText = 'Selecione uma conta';
+        buildEmptyInventoryGrids();
+      }
+
+      updateSavedNicksDropdown();
+      renderBotsList();
+      updateMetricsDisplay();
     }
 
     function handleLogFilterChange() {
@@ -666,6 +826,85 @@
       });
     }
 
+    function updateMetricsDisplay() {
+      let totalAllMoney = 0;
+      let totalAllDailyMoney = 0;
+      let totalAllHourlyMoney = 0;
+      let earliestConnectTime = Date.now();
+      let hasAccounts = accountStats.size > 0;
+
+      const listEl = document.getElementById('metrics-accounts-list');
+      if (listEl) {
+        listEl.innerHTML = '';
+        if (!hasAccounts) {
+          listEl.innerHTML = '<div class="text-xs text-slate-600 italic py-2 text-center">Nenhum rendimento registrado nas últimas 24h...</div>';
+        }
+      }
+
+      accountStats.forEach((stats, user) => {
+        const curMoney = stats.currentMoney || 0;
+        const daily = stats.dailyMoney || 0;
+        const cTime = stats.connectTime || Date.now();
+
+        totalAllMoney += curMoney;
+        totalAllDailyMoney += daily;
+        if (cTime < earliestConnectTime) {
+          earliestConnectTime = cTime;
+        }
+
+        const hoursConnected = Math.max(0.05, (Date.now() - cTime) / 3600000);
+        totalAllHourlyMoney += (daily / hoursConnected);
+
+        if (listEl) {
+          const row = document.createElement('div');
+          row.className = 'flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800/60 text-xs';
+          row.innerHTML = `
+            <div class="flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full ${stats.isVip ? 'bg-amber-400' : 'bg-slate-400'}"></span>
+              <span class="font-semibold text-slate-200">${user}</span>
+            </div>
+            <div class="text-amber-400 font-bold text-xs">
+              +${formatCoinsCompact(daily)} (24h)
+            </div>
+          `;
+          listEl.appendChild(row);
+        }
+      });
+
+      // Atualiza o Card Vermelho
+      document.getElementById('metric-total-money-all').innerText = formatCoinsCompact(totalAllMoney);
+      document.getElementById('metric-diamond-chest').innerText = diamondStockData.home || 'diamante1';
+      document.getElementById('metric-diamond-packs').innerText = `(~${diamondStockData.packs.toFixed(1)} packs)`;
+
+      // Atualiza o Card Amarelo: Conta Selecionada OU 'Todas'
+      if (selectedBot && accountStats.has(selectedBot)) {
+        const sel = accountStats.get(selectedBot);
+        document.getElementById('perf-target-account').innerText = selectedBot;
+        document.getElementById('perf-current-money').innerText = formatCoinsCompact(sel.currentMoney || 0);
+        document.getElementById('perf-today-money').innerText = formatCoinsCompact(sel.dailyMoney || 0);
+
+        const hoursConnected = Math.max(0.05, (Date.now() - (sel.connectTime || Date.now())) / 3600000);
+        const hourly = (sel.dailyMoney || 0) / hoursConnected;
+        document.getElementById('perf-hourly-money').innerText = `${formatCoinsCompact(hourly)}/h`;
+
+        const minutesConnected = Math.floor(hoursConnected * 60);
+        document.getElementById('perf-session-time').innerText = `Tempo de sessão: ${minutesConnected}m`;
+      } else {
+        document.getElementById('perf-target-account').innerText = 'Todas';
+        document.getElementById('perf-current-money').innerText = formatCoinsCompact(totalAllMoney);
+        document.getElementById('perf-today-money').innerText = formatCoinsCompact(totalAllDailyMoney);
+        document.getElementById('perf-hourly-money').innerText = `${formatCoinsCompact(totalAllHourlyMoney)}/h`;
+
+        if (hasAccounts) {
+          const totalHours = Math.max(0.05, (Date.now() - earliestConnectTime) / 3600000);
+          const totalMinutes = Math.floor(totalHours * 60);
+          document.getElementById('perf-session-time').innerText = `Tempo ativo: ${totalMinutes}m`;
+        } else {
+          document.getElementById('perf-session-time').innerText = 'Tempo de sessão: 0m';
+        }
+      }
+    }
+
     function handleSendChat(e) {
       e.preventDefault();
       const input = document.getElementById('input-chat-message');
@@ -700,7 +939,6 @@
 
       if (!username) return;
 
-      // Salva ou atualiza a conta no localStorage
       savedAccounts[username.toLowerCase()] = {
         username,
         useDefaultPassword: useDefaultPass,
@@ -711,6 +949,9 @@
         proxy: proxyData
       };
       localStorage.setItem('cl_saved_accounts', JSON.stringify(savedAccounts));
+
+      updateSavedNicksDropdown();
+      renderBotsList();
 
       socket.emit('start_bot', {
         username,
@@ -731,8 +972,27 @@
       socket.emit('toggle_pause', { username });
     }
 
+    // Toggle de conexão: desliga se online, reloga com os dados guardados se offline
     function handleDisconnectBot(username) {
-      socket.emit('stop_bot', { username });
+      const liveBot = botsMap.get(username);
+      const isOnline = liveBot && liveBot.connected;
+
+      if (isOnline) {
+        socket.emit('stop_bot', { username });
+      } else {
+        const acc = savedAccounts[username.toLowerCase()];
+        if (acc) {
+          const pass = acc.useDefaultPassword ? defaultPassword : acc.password;
+          socket.emit('start_bot', {
+            username: acc.username,
+            password: pass,
+            host: acc.host || 'solaris.craftlandia.com.br',
+            port: acc.port || 25565,
+            macroType: acc.macroType,
+            proxy: acc.proxy
+          });
+        }
+      }
     }
 
     function handleAdjustSwords(direction) {
@@ -744,21 +1004,63 @@
       socket.emit('reset_used_swords');
     }
 
+    function handleTransferAllToFatal() {
+      if (!confirm('Deseja transferir todo o saldo em mãos de todas as contas para Fatal?')) return;
+      socket.emit('transfer_all_to_fatal');
+    }
+
+    function handleTransferSelectedToFatal() {
+      if (!selectedBot) {
+        alert('Selecione uma conta primeiro.');
+        return;
+      }
+      if (selectedBot.toLowerCase() === 'fatal') {
+        alert('A conta selecionada é a conta Fatal de destino.');
+        return;
+      }
+      socket.emit('transfer_single_to_fatal', { username: selectedBot });
+    }
+
+    socket.on('connect', () => {
+      const accountsToBootstrap = Object.values(savedAccounts);
+      if (accountsToBootstrap.length > 0) {
+        accountsToBootstrap.forEach(acc => {
+          const pass = acc.useDefaultPassword ? defaultPassword : acc.password;
+          socket.emit('start_bot', {
+            username: acc.username,
+            password: pass,
+            host: acc.host,
+            port: acc.port,
+            macroType: acc.macroType,
+            proxy: acc.proxy
+          });
+        });
+      }
+    });
+
     socket.on('init_state', (data) => {
       if (data.sharedState) {
-        document.getElementById('stat-total-profit').innerText = `${data.sharedState.totalProfit.toFixed(2)} Coins`;
+        document.getElementById('stat-total-profit').innerText = formatCoinsCompact(data.sharedState.totalProfit);
         document.getElementById('stat-swords-repaired').innerText = data.sharedState.repairedSwordsCount;
         document.getElementById('stat-used-swords').innerText = data.sharedState.usedSwordsCount;
+      }
+      if (data.diamondStock) {
+        diamondStockData = data.diamondStock;
       }
       if (data.activeBots) {
         botsMap.clear();
         data.activeBots.forEach(b => botsMap.set(b.username, b));
         renderBotsList();
       }
+      if (data.allAccountMetrics) {
+        accountStats.clear();
+        data.allAccountMetrics.forEach(m => accountStats.set(m.username, m));
+        updateMetricsDisplay();
+      }
     });
 
     socket.on('state_update', (sharedState) => {
-      document.getElementById('stat-total-profit').innerText = `${sharedState.totalProfit.toFixed(2)} Coins`;
+      document.getElementById('stat-total-profit').innerText = formatCoinsCompact(sharedState.totalProfit);
       document.getElementById('stat-swords-repaired').innerText = sharedState.repairedSwordsCount;
       document.getElementById('stat-used-swords').innerText = sharedState.usedSwordsCount;
     });
@@ -766,19 +1068,16 @@
     socket.on('bot_status', (botData) => {
       botsMap.set(botData.username, botData);
       renderBotsList();
-      if (!selectedBot) selectBot(botData.username);
+      if (!selectedBot) {
+        updateMetricsDisplay();
+      }
     });
 
     socket.on('bot_removed', ({ username }) => {
       botsMap.delete(username);
-      if (selectedBot === username) {
-        selectedBot = null;
-        document.getElementById('inv-selected-bot').innerText = '(Nenhum selecionado)';
-        document.getElementById('chat-active-account').innerText = 'Selecione uma conta';
-        buildEmptyInventoryGrids();
-      }
+      accountStats.delete(username);
       renderBotsList();
-      renderCurrentChat();
+      updateMetricsDisplay();
     });
 
     socket.on('log_message', (log) => {
@@ -803,6 +1102,19 @@
         updateInventoryDisplay(slots);
       }
     });
+
+    socket.on('account_metrics_update', (data) => {
+      accountStats.set(data.username, data);
+      updateMetricsDisplay();
+    });
+
+    socket.on('diamond_stock_update', (data) => {
+      diamondStockData = data;
+      document.getElementById('metric-diamond-chest').innerText = data.home || 'diamante1';
+      document.getElementById('metric-diamond-packs').innerText = `(~${data.packs.toFixed(1)} packs)`;
+    });
+
+    renderBotsList();
   </script>
 </body>
 </html>

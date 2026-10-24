@@ -39,7 +39,7 @@ class MobVipMacro {
           const val = parseFloat(rawNum);
           if (!isNaN(val)) {
             this.emitLog(`💵 Venda computada: +${val.toFixed(2)} Coins.`);
-            this.sharedState.addProfit(this.config.username, val);
+            this.sharedState.addProfit(this.config.username, val, true);
 
             this.accumulatedBalance += val;
 
@@ -53,6 +53,7 @@ class MobVipMacro {
                 await this.sleep(1000);
                 this.bot.chat(`/money pay Fatal ${amountToSend}`);
                 this.emitLog(`📤 [VIP] Transferência confirmada! Saldo zerado.`);
+                this.sharedState.registerMoneyTransfer(this.config.username, amountToSend);
                 this.accumulatedBalance = 0;
               } catch (tErr) {
                 this.emitLog(`❌ Erro na transferência VIP: ${tErr.message}`);
@@ -213,6 +214,7 @@ class MobVipMacro {
 
     if (packs >= 18 || emptySlots <= 3) {
       this.emitLog(`📦 Condição de venda VIP (~${packs.toFixed(1)} packs / ${emptySlots} slots livres). Vendendo...`);
+      this.sharedState.addDropsSold(this.config.username, packs);
       await this.sendCommand('/vender farms', 1200);
       await this.sleep(800);
       await this.sendCommand('/vender mobs', 1200);
@@ -250,6 +252,13 @@ class MobVipMacro {
       try {
         const container = await this.bot.openContainer(chest);
         await this.sleep(1000);
+
+        let totalChestBlocks = 0;
+        for (const it of container.containerItems()) {
+          if (it && it.name === 'diamond_block') totalChestBlocks += it.count;
+        }
+
+        this.sharedState.updateDiamondStock(`diamante${i}`, totalChestBlocks / 64);
 
         const diaItem = container.containerItems().find((it) => it.name === 'diamond_block');
         if (diaItem) {
@@ -546,7 +555,6 @@ class MobVipMacro {
   async repairFakeSwordsRoutine() {
     this.emitLog('⚡ Quantidade de espadas usadas >= 3! Limpando drops antes de ir aos baús...');
 
-    // Venda prévia no mob antes de qualquer teleporte
     this.emitLog('📦 Executando /vender mobs antes de sair do mob...');
     this.bot.chat('/vender mobs');
     await this.sleep(1000);
@@ -594,13 +602,11 @@ class MobVipMacro {
         continue;
       }
 
-      // 1. Reparo em lote das fakes
       if (this.sharedState.getUsedSwords() >= 3) {
         await this.repairFakeSwordsRoutine();
         continue;
       }
 
-      // 2. Validação da espada na mão
       let currentSword = this.bot.heldItem;
       if (!currentSword || currentSword.name !== 'diamond_sword') {
         const restored = await this.restorePersonalSwordToHand();
@@ -628,13 +634,11 @@ class MobVipMacro {
         continue;
       }
 
-      // 3. Venda periódica
       if (Date.now() - this.lastInventoryCheck >= 4000) {
         await this.checkAndSellDrops();
         this.lastInventoryCheck = Date.now();
       }
 
-      // 4. Ataque aos mobs com verificação pós-hit
       const mob = this.findNearbyMob();
       if (mob) {
         try {

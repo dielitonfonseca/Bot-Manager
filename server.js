@@ -1,10 +1,15 @@
 const express = require('express');
 const http = require('http');
+const net = require('net');
+const dns = require('dns');
+const { promisify } = require('util');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 const mineflayer = require('mineflayer');
-const socks = require('socks').SocksClient;
+const { SocksClient } = require('socks');
+
+const resolveSrv = promisify(dns.resolveSrv);
 
 const MobFarmerMacro = require('./macros/mob_farmer');
 const MobVipMacro = require('./macros/mob_vip');
@@ -19,17 +24,138 @@ const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
+// Resolução de registro SRV do servidor Minecraft antes de abrir o túnel
+async function resolveMinecraftServer(hostname, defaultPort = 25565) {
+  try {
+    const srvRecords = await resolveSrv(`_minecraft._tcp.${hostname}`);
+    if (srvRecords && srvRecords.length > 0) {
+      const best = srvRecords.sort((a, b) => a.priority - b.priority || b.weight - a.weight)[0];
+      return { host: best.name, port: best.port };
+    }
+  } catch (err) {
+    // Se não houver registro SRV, conecta direto no hostname informado
+  }
+  return { host: hostname, port: defaultPort };
+}
+
+// Criação de túnel HTTP CONNECT para proxies HTTP com autenticação
+function createHttpConnectTunnel(proxy, destination) {
+  return new Promise((resolve, reject) => {
+    const socket = net.createConnection({
+      host: proxy.host,
+      port: parseInt(proxy.port),
+      timeout: 15000
+    });
+
+    socket.once('connect', () => {
+      let req = `CONNECT ${destination.host}:${destination.port} HTTP/1.1\r\n` +
+                `Host: ${destination.host}:${destination.port}\r\n`;
+
+      if (proxy.user && proxy.pass) {
+        const auth = Buffer.from(`${proxy.user}:${proxy.pass}`).toString('base64');
+        req += `Proxy-Authorization: Basic ${auth}\r\n`;
+      }
+      req += '\r\n';
+
+      socket.write(req);
+    });
+
+    let headerBuf = '';
+    const onData = (chunk) => {
+      headerBuf += chunk.toString();
+      if (headerBuf.includes('\r\n\r\n')) {
+        socket.removeListener('data', onData);
+        const statusLine = headerBuf.split('\r\n')[0];
+        if (statusLine.includes(' 200 ')) {
+          resolve(socket);
+        } else {
+          socket.destroy();
+          reject(new Error(`Proxy HTTP recusou o túnel: ${statusLine}`));
+        }
+      }
+    };
+
+    socket.on('data', onData);
+    socket.once('timeout', () => {
+      socket.destroy();
+      reject(new Error('Timeout ao conectar na proxy HTTP'));
+    });
+    socket.once('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
 // Gerenciador de Estado Global Compartilhado
 class SharedStateManager {
   constructor() {
     this.totalProfit = 0;
     this.repairedSwordsCount = 0;
     this.usedSwordsCount = 0;
+    this.diamondStock = { home: 'diamante1', packs: 0 };
+    this.accountMetrics = new Map();
   }
 
-  addProfit(botName, amount) {
+  addProfit(botName, amount, isVip = false) {
     this.totalProfit += amount;
     broadcastSharedState();
+
+    const current = this.accountMetrics.get(botName) || {
+      username: botName,
+      currentMoney: 0,
+      dailyMoney: 0,
+      dropsSoldPacks: 0,
+      connectTime: Date.now(),
+      isVip
+    };
+
+    current.dailyMoney += amount;
+    this.accountMetrics.set(botName, current);
+    broadcastAccountMetrics(botName);
+  }
+
+  updateAccountMoneyBalance(botName, parsedMoney) {
+    const current = this.accountMetrics.get(botName) || {
+      username: botName,
+      currentMoney: 0,
+      dailyMoney: 0,
+      dropsSoldPacks: 0,
+      connectTime: Date.now(),
+      isVip: false
+    };
+
+    current.currentMoney = parsedMoney;
+    this.accountMetrics.set(botName, current);
+    broadcastAccountMetrics(botName);
+  }
+
+  registerMoneyTransfer(botName, amount) {
+    const current = this.accountMetrics.get(botName);
+    if (current) {
+      current.currentMoney = Math.max(0, current.currentMoney - amount);
+      this.accountMetrics.set(botName, current);
+      broadcastAccountMetrics(botName);
+    }
+  }
+
+  addDropsSold(botName, packs) {
+    const current = this.accountMetrics.get(botName) || {
+      username: botName,
+      currentMoney: 0,
+      dailyMoney: 0,
+      dropsSoldPacks: 0,
+      connectTime: Date.now(),
+      isVip: false
+    };
+
+    current.dropsSoldPacks += packs;
+    this.accountMetrics.set(botName, current);
+    broadcastAccountMetrics(botName);
+  }
+
+  updateDiamondStock(home, packs) {
+    this.diamondStock = { home, packs };
+    io.emit('diamond_stock_update', this.diamondStock);
   }
 
   addRepairedSwords(count, botName) {
@@ -54,7 +180,6 @@ class SharedStateManager {
     broadcastSharedState();
   }
 
-  // Incremento e decremento estritamente de 1 em 1
   adjustUsedSwords(amount, author) {
     const step = amount > 0 ? 1 : -1;
     this.usedSwordsCount = Math.max(0, this.usedSwordsCount + step);
@@ -76,7 +201,7 @@ const sharedState = new SharedStateManager();
 const activeBots = new Map();
 const activeMacros = new Map();
 const botMetas = new Map();
-const reconnectTimers = new Map(); // Controle de retentativas a cada 30s
+const reconnectTimers = new Map();
 
 function emitLog(username, message, isSystem = false) {
   const time = new Date().toLocaleTimeString();
@@ -94,6 +219,13 @@ function emitLog(username, message, isSystem = false) {
 
 function broadcastSharedState() {
   io.emit('state_update', sharedState.getState());
+}
+
+function broadcastAccountMetrics(username) {
+  const m = sharedState.accountMetrics.get(username);
+  if (m) {
+    io.emit('account_metrics_update', m);
+  }
 }
 
 function broadcastBotStatus(username) {
@@ -139,7 +271,7 @@ function scheduleReconnect(username, botConfig) {
   meta.connected = false;
   broadcastBotStatus(username);
 
-  emitLog(username, '⏳ Servidor indisponível ou reiniciando. Tentando reconectar em 30 segundos...');
+  emitLog(username, '⏳ Servidor indisponível ou reconectando. Tentando novamente em 30 segundos...');
   const timer = setTimeout(() => {
     reconnectTimers.delete(username);
     const currentMeta = botMetas.get(username);
@@ -152,65 +284,78 @@ function scheduleReconnect(username, botConfig) {
   reconnectTimers.set(username, timer);
 }
 
-function createBotInstance(botConfig) {
+async function createBotInstance(botConfig) {
   const { username, password, host, port, macroType, proxy } = botConfig;
 
-  // Limpa instâncias ou sockets anteriores da mesma conta
   if (activeBots.has(username)) {
-    try { activeBots.get(username).quit(); } catch (e) {}
-    activeBots.delete(username);
-  }
-  if (activeMacros.has(username)) {
-    try { activeMacros.get(username).stop(); } catch (e) {}
-    activeMacros.delete(username);
+    const existing = activeBots.get(username);
+    if (existing && existing._client && !existing._client.destroyed) {
+      return;
+    }
   }
 
-  const serverHost = host ? host.trim() : 'solaris.craftlandia.com.br';
-  const serverPort = parseInt(port) || 25565;
+  const rawHost = host ? host.trim() : 'solaris.craftlandia.com.br';
+  const rawPort = parseInt(port) || 25565;
+
+  emitLog(username, `Resolvendo rota e registro SRV para ${rawHost}...`);
+  const resolvedTarget = await resolveMinecraftServer(rawHost, rawPort);
+  emitLog(username, `Destino resolvido com sucesso: ${resolvedTarget.host}:${resolvedTarget.port}`);
 
   const options = {
-    host: serverHost,
-    port: serverPort,
+    host: resolvedTarget.host,
+    port: resolvedTarget.port,
     username: username,
-    version: '1.8.9',
+    version: '1.8.9', // Fixado para pular o ping de status conforme a dica 5
     viewDistance: 'tiny',
     skipValidation: true,
     checkTimeoutInterval: 45000
   };
 
+  // Se houver proxy configurada, cria o túnel dedicado
   if (proxy && proxy.host && proxy.port) {
-    emitLog(username, `Configurando conexão via Proxy SOCKS5 ${proxy.host}:${proxy.port}...`);
+    emitLog(username, `Conectando túnel proxy ${proxy.host}:${proxy.port} -> ${resolvedTarget.host}:${resolvedTarget.port}...`);
+
     options.connect = (client) => {
-      const socksOptions = {
+      // 1. Tenta via SOCKS5
+      SocksClient.createConnection({
         proxy: {
-          host: proxy.host,
+          host: proxy.host.trim(),
           port: parseInt(proxy.port),
-          type: 5
+          type: 5,
+          userId: proxy.user ? proxy.user.trim() : undefined,
+          password: proxy.pass ? proxy.pass.trim() : undefined
         },
         command: 'connect',
         destination: {
-          host: serverHost,
-          port: serverPort
-        }
-      };
-
-      if (proxy.user && proxy.pass) {
-        socksOptions.proxy.userId = proxy.user;
-        socksOptions.proxy.password = proxy.pass;
-      }
-
-      socks.createConnection(socksOptions, (err, info) => {
-        if (err) {
-          emitLog(username, `❌ Erro na conexão via Proxy: ${err.message}`);
-          scheduleReconnect(username, botConfig);
-          return;
-        }
-        client.setSocket(info.socket);
+          host: resolvedTarget.host,
+          port: resolvedTarget.port
+        },
+        timeout: 15000
+      })
+      .then(({ socket }) => {
+        emitLog(username, '🔌 Túnel SOCKS5 estabelecido com sucesso!');
+        client.setSocket(socket);
         client.emit('connect');
+      })
+      .catch((socksErr) => {
+        emitLog(username, `⚠️ SOCKS5 falhou (${socksErr.message}). Tentando túnel HTTP CONNECT...`);
+
+        // 2. Fallback para HTTP CONNECT (padrão Webshare)
+        createHttpConnectTunnel(proxy, resolvedTarget)
+          .then((httpSocket) => {
+            emitLog(username, '🔌 Túnel HTTP CONNECT estabelecido com sucesso!');
+            client.setSocket(httpSocket);
+            client.emit('connect');
+          })
+          .catch((httpErr) => {
+            emitLog(username, `❌ Todos os protocolos de proxy falharam: ${httpErr.message}`);
+            // NUNCA conectar direto pelo IP local para não expor a máquina (Dica 7)
+            client.emit('error', httpErr);
+          });
       });
     };
   } else {
-    emitLog(username, `Iniciando conexão direta com ${serverHost}:${serverPort}...`);
+    emitLog(username, `Iniciando conexão direta com ${resolvedTarget.host}:${resolvedTarget.port}...`);
   }
 
   let bot;
@@ -257,15 +402,15 @@ function createBotInstance(botConfig) {
       try { bot.quit(); } catch (e) {}
       scheduleReconnect(username, botConfig);
     }
-  }, 20000);
+  }, 25000);
 
   bot._client.once('connect', () => {
-    emitLog(username, '🔌 Socket TCP conectado.');
+    emitLog(username, '🔌 Handshake inicial concluído.');
   });
 
   bot.once('login', () => {
     clearTimeout(connectionTimeout);
-    emitLog(username, '🔑 Autenticado. Aguardando spawn...');
+    emitLog(username, '🔑 Autenticado na rede. Aguardando spawn do jogador...');
   });
 
   bot.on('messagestr', (message) => {
@@ -278,7 +423,21 @@ function createBotInstance(botConfig) {
       time: new Date().toLocaleTimeString()
     });
 
-    const lower = raw.toLowerCase();
+    const clean = raw.replace(/§[0-9a-fk-or]/gi, '').trim();
+    const lower = clean.toLowerCase();
+
+    if (lower.includes('saldo atual:') && lower.includes('coins')) {
+      const match = clean.match(/saldo atual:\s*([\d,\.]+)\s*Coins/i);
+      if (match && match[1]) {
+        const rawNum = match[1].replace(/,/g, '');
+        const val = parseFloat(rawNum);
+        if (!isNaN(val)) {
+          sharedState.updateAccountMoneyBalance(username, val);
+          emitLog(username, `💵 Saldo atualizado via /money: ${val.toFixed(2)} Coins.`);
+        }
+      }
+    }
+
     if ((lower.includes('/login') || lower.includes('registre-se') || lower.includes('por favor digite')) && meta.password) {
       emitLog(username, 'Prompt de login identificado. Enviando senha em 1s...');
       setTimeout(() => {
@@ -299,6 +458,30 @@ function createBotInstance(botConfig) {
     meta.spawned = true;
     emitLog(username, '✨ Spawn confirmado! Retomando rotina...');
     broadcastBotStatus(username);
+
+    if (!sharedState.accountMetrics.has(username)) {
+      sharedState.accountMetrics.set(username, {
+        username: username,
+        currentMoney: 0,
+        dailyMoney: 0,
+        dropsSoldPacks: 0,
+        connectTime: Date.now(),
+        isVip
+      });
+      broadcastAccountMetrics(username);
+    }
+
+    setTimeout(() => {
+      bot.chat('/money');
+    }, 4000);
+
+    const moneyInterval = setInterval(() => {
+      if (activeBots.has(username) && meta.connected) {
+        bot.chat('/money');
+      } else {
+        clearInterval(moneyInterval);
+      }
+    }, 3600000);
 
     if (bot.inventory) {
       bot.inventory.on('updateSlot', () => emitInventoryData(username, bot));
@@ -363,7 +546,21 @@ function cleanupBot(username) {
 
   botMetas.delete(username);
   io.emit('bot_removed', { username });
-  emitLog('SISTEMA', `Conta ${username} desvinculada manualmente.`, true);
+  emitLog('SISTEMA', `Conta ${username} desconectada.`, true);
+}
+
+async function executeTwoStepTransfer(bot, username, targetUser, amount) {
+  if (!bot || amount <= 0 || username.toLowerCase() === targetUser.toLowerCase()) return;
+  const floorVal = Math.floor(amount);
+
+  emitLog(username, `💸 Transferindo ${floorVal} Coins para ${targetUser} (Etapa 1/2)...`);
+  bot.chat(`/money pay ${targetUser} ${floorVal}`);
+
+  setTimeout(() => {
+    emitLog(username, `💸 Confirmando envio de ${floorVal} Coins para ${targetUser} (Etapa 2/2)...`);
+    bot.chat(`/money pay ${targetUser} ${floorVal}`);
+    sharedState.registerMoneyTransfer(username, floorVal);
+  }, 1000);
 }
 
 io.on('connection', (socket) => {
@@ -378,9 +575,13 @@ io.on('connection', (socket) => {
     });
   });
 
+  const allMetrics = Array.from(sharedState.accountMetrics.values());
+
   socket.emit('init_state', {
     sharedState: sharedState.getState(),
-    activeBots: activeList
+    activeBots: activeList,
+    diamondStock: sharedState.diamondStock,
+    allAccountMetrics: allMetrics
   });
 
   socket.on('start_bot', (data) => {
@@ -424,7 +625,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Incremento / Decremento rigoroso de 1 em 1
   socket.on('adjust_used_swords', ({ amount }) => {
     const step = amount > 0 ? 1 : -1;
     sharedState.adjustUsedSwords(step, 'Painel Web');
@@ -432,6 +632,23 @@ io.on('connection', (socket) => {
 
   socket.on('reset_used_swords', () => {
     sharedState.setUsedSwords(0, 'Painel Web');
+  });
+
+  socket.on('transfer_all_to_fatal', () => {
+    activeBots.forEach((bot, user) => {
+      const metric = sharedState.accountMetrics.get(user);
+      if (metric && metric.currentMoney > 0 && user.toLowerCase() !== 'fatal') {
+        executeTwoStepTransfer(bot, user, 'Fatal', metric.currentMoney);
+      }
+    });
+  });
+
+  socket.on('transfer_single_to_fatal', ({ username }) => {
+    const bot = activeBots.get(username);
+    const metric = sharedState.accountMetrics.get(username);
+    if (bot && metric && metric.currentMoney > 0) {
+      executeTwoStepTransfer(bot, username, 'Fatal', metric.currentMoney);
+    }
   });
 });
 

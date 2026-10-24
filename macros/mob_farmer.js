@@ -9,9 +9,9 @@ class MobFarmerMacro {
     this.running = false;
     this.isPaused = false;
 
-    this.MIN_DURABILITY_THRESHOLD = 120; // Limiar de segurança para troca
-    this.accumulatedBalance = 0;        // Saldo individual acumulado da conta
-    this.isTransferring = false;         // Trava contra envios simultâneos
+    this.MIN_DURABILITY_THRESHOLD = 120;
+    this.accumulatedBalance = 0;
+    this.isTransferring = false;
 
     this.lastCommandTime = 0;
     this.lastInventoryCheck = 0;
@@ -25,14 +25,12 @@ class MobFarmerMacro {
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase();
 
-      // Detecção de kick por AFK
       if (lower.includes('voce ficou afk') || lower.includes('teleportado para um local seguro')) {
         this.emitLog('⚠️ [ANTI-AFK] Kick por AFK detectado! Retornando para /home mob (Sem VIP)...');
         this.handleAfkTeleport();
         return;
       }
 
-      // Detecção de venda de drops
       if (clean.includes('Total recebido:') && clean.includes('Coins')) {
         const match = clean.match(/Total recebido:\s*([\d,\.]+)\s*Coins/i);
         if (match && match[1]) {
@@ -40,26 +38,23 @@ class MobFarmerMacro {
           const val = parseFloat(rawNum);
           if (!isNaN(val)) {
             this.emitLog(`💵 Venda computada: +${val.toFixed(2)} Coins.`);
-            this.sharedState.addProfit(this.config.username, val);
+            this.sharedState.addProfit(this.config.username, val, false);
 
-            // Acumula no saldo individual desta conta
             this.accumulatedBalance += val;
 
-            // Dispara transferência se atingir 1kk (1.000.000 Coins) e não for a conta Fatal
             if (this.accumulatedBalance >= 1000000 && !this.isTransferring && this.config.username.toLowerCase() !== 'fatal') {
               this.isTransferring = true;
               const amountToSend = Math.floor(this.accumulatedBalance);
               this.emitLog(`💰 Saldo individual acumulou 1kk (${amountToSend} Coins)! Enviando para Fatal em 2 etapas com 1s de intervalo...`);
 
               try {
-                // 1º Envio
                 this.bot.chat(`/money pay Fatal ${amountToSend}`);
                 this.emitLog(`📤 [1/2] /money pay Fatal ${amountToSend} enviado. Aguardando 1s...`);
                 await this.sleep(1000);
 
-                // 2º Envio (confirmação da transação)
                 this.bot.chat(`/money pay Fatal ${amountToSend}`);
                 this.emitLog(`📤 [2/2] Confirmação enviada! Saldo individual zerado com sucesso.`);
+                this.sharedState.registerMoneyTransfer(this.config.username, amountToSend);
                 this.accumulatedBalance = 0;
               } catch (tErr) {
                 this.emitLog(`❌ Erro ao transferir money: ${tErr.message}`);
@@ -77,7 +72,7 @@ class MobFarmerMacro {
   async start() {
     this.running = true;
     this.isPaused = false;
-    this.emitLog('⚔️ Macro Mata Mob sem VIP iniciada (Transferência automática de 1kk ativa)...');
+    this.emitLog('⚔️ Macro Mata Mob sem VIP iniciada...');
 
     while (this.running) {
       if (this.isPaused) {
@@ -245,6 +240,7 @@ class MobFarmerMacro {
     const packs = this.countMobDropPacks();
     if (force || packs >= 18) {
       this.emitLog(`📦 Limpando drops do inventário (~${packs.toFixed(1)} packs)...`);
+      this.sharedState.addDropsSold(this.config.username, packs);
       await this.sendCommand('/vender mobs', 1200);
       await this.sleep(800);
       await this.sendCommand('/vender farms', 1200);
@@ -302,7 +298,6 @@ class MobFarmerMacro {
       }
 
       try {
-        // 1. Procura se existem espadas novas no baú (durabilidade >= 1200)
         const freshInChest = [];
         for (let s = 0; s < container.inventoryStart; s++) {
           const item = container.slots[s];
@@ -322,7 +317,6 @@ class MobFarmerMacro {
           continue;
         }
 
-        // 2. Localiza a espada gasta do jogador na janela aberta
         let brokenSwordSlot = null;
         for (let s = container.inventoryStart; s < container.slots.length; s++) {
           const it = container.slots[s];
@@ -335,7 +329,6 @@ class MobFarmerMacro {
           }
         }
 
-        // 3. Devolve a espada gasta colocando diretamente no primeiro slot livre do baú
         if (brokenSwordSlot !== null) {
           let emptyChestSlot = null;
           for (let s = 0; s < container.inventoryStart; s++) {
@@ -358,7 +351,6 @@ class MobFarmerMacro {
           }
         }
 
-        // 4. Retira exatamente UMA espada nova
         const targetNew = freshInChest[0];
         this.emitLog(`🗡️ [RETIRADA] Puxando UMA espada nova do slot ${targetNew.slot} (Dur: ${targetNew.dur})...`);
         await this.bot.clickWindow(targetNew.slot, 0, 1);
@@ -391,7 +383,6 @@ class MobFarmerMacro {
       return false;
     }
 
-    // 5. Equipa a espada boa na mão
     await this.sleep(500);
     const bestSword = this.getDiamondSword();
     if (bestSword) {
@@ -404,7 +395,6 @@ class MobFarmerMacro {
       }
     }
 
-    // 6. Retorna para o mob
     this.emitLog('📍 [RETORNO] Teleportando de volta para /home mob...');
     await this.teleportSafe('home mob');
     this.emitLog('🎯 Chegou no mob! Pronto para abater.');
@@ -434,7 +424,6 @@ class MobFarmerMacro {
         continue;
       }
 
-      // 1. Verificação prévia da espada na mão
       let currentSword = this.bot.heldItem;
       if (!currentSword || currentSword.name !== 'diamond_sword') {
         const bestInInv = this.getDiamondSword();
@@ -449,27 +438,23 @@ class MobFarmerMacro {
 
       const dur = this.getSwordDurability(currentSword);
 
-      // Gatilho pré-ataque
       if (!currentSword || currentSword.name !== 'diamond_sword' || dur < this.MIN_DURABILITY_THRESHOLD) {
         this.emitLog(`🛡️ [BLINDAGEM] Espada gasta ou ausente (${dur}/1561 < ${this.MIN_DURABILITY_THRESHOLD}). Trocando nos baús...`);
         await this.replaceSwordRoutine();
         continue;
       }
 
-      // 2. Venda periódica
       if (Date.now() - this.lastInventoryCheck >= 10000) {
         await this.checkAndSellDrops(false);
         this.lastInventoryCheck = Date.now();
       }
 
-      // 3. Ataque contínuo com verificação pós-hit imediata
       const mob = this.findNearbyMob();
       if (mob) {
         try {
           await this.bot.lookAt(mob.position.offset(0, mob.height * 0.8, 0), true);
           this.bot.attack(mob);
 
-          // VERIFICAÇÃO ATÔMICA PÓS-HIT
           const afterHitSword = this.bot.heldItem;
           const afterHitDur = this.getSwordDurability(afterHitSword);
 
