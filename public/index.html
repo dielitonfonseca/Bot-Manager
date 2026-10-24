@@ -84,7 +84,7 @@
         <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
           CL Macro Manager <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Solaris 1.8.9</span>
         </h1>
-        <p class="text-xs text-slate-400">Controlo, monitorização de proxy e rotações de espada</p>
+        <p class="text-xs text-slate-400">Controle, monitoramento de proxy e rotações de espada</p>
       </div>
     </div>
 
@@ -126,7 +126,7 @@
   <!-- Layout Principal em Grid -->
   <main class="max-w-[1750px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-    <!-- COLUNA DA ESQUERDA (4 colunas): Cadastro Completo, Contas e Inventário -->
+    <!-- COLUNA DA ESQUERDA (4 colunas): Cadastro, Distribuição de Proxy, Contas e Inventário -->
     <div class="lg:col-span-4 flex flex-col gap-6 w-full">
 
       <!-- CARD 1: Registar Nova Conta -->
@@ -134,7 +134,7 @@
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
           <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
             <i class="fa-solid fa-user-plus text-indigo-400"></i>
-            <span>Registar Conta</span>
+            <span>Cadastrar Conta</span>
           </div>
           <button onclick="toggleCard('card-add-account', this)" class="text-slate-400 hover:text-white transition-colors p-1">
             <i class="fa-solid fa-chevron-up"></i>
@@ -202,12 +202,12 @@
             </select>
           </div>
 
-          <!-- Secção de Proxy SOCKS5 -->
+          <!-- Secção de Proxy Individual -->
           <div class="pt-2 border-t border-slate-800/80">
             <div class="flex items-center justify-between mb-2">
               <label class="flex items-center gap-2 cursor-pointer">
                 <input id="check-use-proxy" type="checkbox" onchange="toggleProxyInputs(this.checked)" class="w-4 h-4 rounded bg-slate-950 border-slate-800 text-indigo-600 focus:ring-0 cursor-pointer">
-                <span class="text-xs font-semibold text-slate-300">Conectar via Proxy SOCKS5</span>
+                <span class="text-xs font-semibold text-slate-300">Conectar via Proxy</span>
               </label>
             </div>
 
@@ -221,7 +221,7 @@
                 </div>
               </div>
               <div class="grid grid-cols-2 gap-2">
-                <input id="input-proxy-user" type="text" placeholder="Utilizador (opcional)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+                <input id="input-proxy-user" type="text" placeholder="Usuário (opcional)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
                 <input id="input-proxy-pass" type="password" placeholder="Senha (opcional)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500">
               </div>
             </div>
@@ -234,7 +234,32 @@
         </div>
       </section>
 
-      <!-- CARD 2: Contas Ativas (Persistentes com Excluir) -->
+      <!-- NOVO CARD: Gerenciador e Distribuição em Massa de Proxies -->
+      <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
+        <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
+          <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
+            <i class="fa-solid fa-network-wired text-amber-400"></i>
+            <span>Distribuição de Proxies</span>
+          </div>
+          <button onclick="toggleCard('card-proxy-dist', this)" class="text-slate-400 hover:text-white transition-colors p-1">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+        </div>
+        <div id="card-proxy-dist" class="p-4 space-y-3 card-transition">
+          <div class="text-[11px] text-slate-400 leading-relaxed">
+            Insira a lista de proxies (uma por linha) no formato <code class="text-amber-400 font-mono">ip:porta:usuario:senha</code>. O sistema distribuirá automaticamente até <b class="text-white">2 contas Sem VIP por proxy</b>, deslogará e reiniciará as macros com o novo túnel.
+          </div>
+          <textarea id="input-proxy-batch" rows="5" placeholder="45.38.107.97:6014:ktaydmsf:4vekfhbujejh&#10;64.137.96.74:6641:ktaydmsf:4vekfhbujejh" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono resize-y"></textarea>
+          <div class="flex justify-end">
+            <button onclick="handleApplyBatchProxies()" class="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
+              <i class="fa-solid fa-arrows-rotate text-xs"></i>
+              Distribuir & Reiniciar Contas Sem VIP
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- CARD 2: Contas Ativas (Persistentes com Excluir e Tag Dourada Proxy) -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
           <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
@@ -455,7 +480,6 @@
     let accountStats = new Map();
     let diamondStockData = { home: 'diamante1', packs: 0 };
 
-    // Formatação monetária estrita em k e kk
     function formatCoinsCompact(val) {
       const num = Number(val) || 0;
       if (num < 1000) {
@@ -516,7 +540,6 @@
       }
     }
 
-    // Atualiza o dropdown (<datalist>) com os nicks guardados
     function updateSavedNicksDropdown() {
       const datalist = document.getElementById('saved-nicks-list');
       if (!datalist) return;
@@ -618,7 +641,6 @@
     initDefaultPassword();
     updateSavedNicksDropdown();
 
-    // Toggle de seleção: clicar na conta ativa remove a seleção para voltar para 'Todas'
     function selectBot(username) {
       if (selectedBot === username) {
         selectedBot = null;
@@ -661,6 +683,7 @@
         const isOnline = liveBot && liveBot.connected;
         const isPaused = liveBot && liveBot.paused;
         const isVip = acc.macroType === 'mob_vip';
+        const hasProxy = acc.proxy && acc.proxy.host && acc.proxy.port;
 
         const opt = document.createElement('option');
         opt.value = user;
@@ -682,8 +705,9 @@
               ${isVip ? 'VIP' : 'NAO'}
             </div>
             <div>
-              <div class="text-sm font-semibold text-white flex items-center gap-1.5">
-                ${user}
+              <div class="text-sm font-semibold text-white flex items-center gap-1.5 flex-wrap">
+                <span>${user}</span>
+                ${hasProxy ? '<span class="text-[10px] text-amber-400 font-bold tracking-wider">(proxy)</span>' : ''}
                 <span class="w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-600'}"></span>
               </div>
               <div class="text-[11px] text-slate-400">${isOnline ? (liveBot.macroName || 'Ativo') : 'Desconectado'}</div>
@@ -705,6 +729,92 @@
       });
 
       selectLog.value = currentSelectedLog;
+    }
+
+    // Distribuição de proxies em lote: aplica exclusivamente nas contas Sem VIP (até 2 contas por proxy)
+    function handleApplyBatchProxies() {
+      const textarea = document.getElementById('input-proxy-batch');
+      const text = textarea.value.trim();
+
+      if (!text) {
+        alert('Insira ao menos uma proxy no formato IP:Porta:Usuário:Senha');
+        return;
+      }
+
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      const parsedProxies = [];
+
+      for (const line of lines) {
+        const parts = line.split(':');
+        if (parts.length >= 2) {
+          parsedProxies.push({
+            host: parts[0].trim(),
+            port: parseInt(parts[1].trim()),
+            user: parts[2] ? parts[2].trim() : undefined,
+            pass: parts[3] ? parts[3].trim() : undefined
+          });
+        }
+      }
+
+      if (parsedProxies.length === 0) {
+        alert('Nenhuma proxy válida encontrada. Verifique o formato IP:Porta:Usuário:Senha');
+        return;
+      }
+
+      // Cada proxy da lista pode ser alocada para até 2 contas
+      const proxyPool = [];
+      parsedProxies.forEach(p => {
+        proxyPool.push({ ...p });
+        proxyPool.push({ ...p });
+      });
+
+      const allKeys = Object.keys(savedAccounts);
+      // Filtra estritamente as contas SEM VIP (as VIP permanecem intocadas)
+      const nonVipKeys = allKeys.filter(k => savedAccounts[k].macroType !== 'mob_vip');
+
+      if (nonVipKeys.length === 0) {
+        alert('Nenhuma conta Sem VIP cadastrada para receber as proxies.');
+        return;
+      }
+
+      if (proxyPool.length < nonVipKeys.length) {
+        if (!confirm(`Aviso: Foram inseridas proxies suficientes para ${proxyPool.length} contas (2 por IP), mas existem ${nonVipKeys.length} contas Sem VIP. As contas excedentes manterão a proxy anterior. Deseja prosseguir?`)) {
+          return;
+        }
+      }
+
+      let assignedCount = 0;
+      nonVipKeys.forEach((key, idx) => {
+        if (idx >= proxyPool.length) return;
+        const assignedProxy = proxyPool[idx];
+        const acc = savedAccounts[key];
+        const username = acc.username;
+
+        // Atualiza a proxy da conta no estado local
+        acc.proxy = assignedProxy;
+        savedAccounts[key] = acc;
+        assignedCount++;
+
+        // Desconecta a conta para aplicar as novas configurações de rede
+        socket.emit('stop_bot', { username });
+
+        // Reconecta automaticamente após 1.5s com o novo túnel
+        setTimeout(() => {
+          const pass = acc.useDefaultPassword ? defaultPassword : acc.password;
+          socket.emit('start_bot', {
+            username: acc.username,
+            password: pass,
+            host: acc.host || 'solaris.craftlandia.com.br',
+            port: acc.port || 25565,
+            macroType: acc.macroType,
+            proxy: acc.proxy
+          });
+        }, 1500 + (idx * 500)); // Escalonamento para evitar picos simultâneos
+      });
+
+      localStorage.setItem('cl_saved_accounts', JSON.stringify(savedAccounts));
+      renderBotsList();
+      alert(`Sucesso! ${assignedCount} conta(s) Sem VIP foram atualizadas com as novas proxies e estão sendo reiniciadas.`);
     }
 
     function handleDeleteAccount(username) {
@@ -871,12 +981,10 @@
         }
       });
 
-      // Atualiza o Card Vermelho
       document.getElementById('metric-total-money-all').innerText = formatCoinsCompact(totalAllMoney);
       document.getElementById('metric-diamond-chest').innerText = diamondStockData.home || 'diamante1';
       document.getElementById('metric-diamond-packs').innerText = `(~${diamondStockData.packs.toFixed(1)} packs)`;
 
-      // Atualiza o Card Amarelo: Conta Selecionada OU 'Todas'
       if (selectedBot && accountStats.has(selectedBot)) {
         const sel = accountStats.get(selectedBot);
         document.getElementById('perf-target-account').innerText = selectedBot;
@@ -972,7 +1080,6 @@
       socket.emit('toggle_pause', { username });
     }
 
-    // Toggle de conexão: desliga se online, reloga com os dados guardados se offline
     function handleDisconnectBot(username) {
       const liveBot = botsMap.get(username);
       const isOnline = liveBot && liveBot.connected;
