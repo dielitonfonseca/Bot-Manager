@@ -1,0 +1,128 @@
+{
+  "defaultPassword": "",
+  "proxiesText": "",
+  "proxyList": [],
+  "accounts": {
+    "fatalamante": {
+      "username": "FatalAmante",
+      "useDefaultPassword": false,
+      "password": "fatalisback26",
+      "host": "solaris.craftlandia.com.br",
+      "port": 25565,
+      "macroType": "mob_farmer",
+      "proxy": {
+        "host": "45.38.107.97",
+        "port": 6014,
+        "user": "ktaydmsf",
+        "pass": "4vekfhbujejh"
+      }
+    },
+    "fatalamante2": {
+      "username": "FatalAmante2",
+      "useDefaultPassword": false,
+      "password": "fatalisback26",
+      "host": "solaris.craftlandia.com.br",
+      "port": 25565,
+      "macroType": "mob_farmer",
+      "proxy": {
+        "host": "45.38.107.97",
+        "port": 6014,
+        "user": "ktaydmsf",
+        "pass": "4vekfhbujejh"
+      }
+    },
+    "fatalamante3": {
+      "username": "FatalAmante3",
+      "useDefaultPassword": false,
+      "password": "fatalisback26",
+      "host": "solaris.craftlandia.com.br",
+      "port": 25565,
+      "macroType": "mob_farmer",
+      "proxy": {
+        "host": "64.137.96.74",
+        "port": 6641,
+        "user": "ktaydmsf",
+        "pass": "4vekfhbujejh"
+      }
+    },
+    "lataf": {
+      "username": "LATAF",
+      "useDefaultPassword": false,
+      "password": "fatalisback26",
+      "host": "solaris.craftlandia.com.br",
+      "port": 25565,
+      "macroType": "mob_vip",
+      "proxy": null
+    },
+    "fatalamante4": {
+      "username": "FatalAmante4",
+      "useDefaultPassword": false,
+      "password": "fatalisback26",
+      "host": "solaris.craftlandia.com.br",
+      "port": 25565,
+      "macroType": "mob_farmer",
+      "proxy": {
+        "host": "64.137.96.74",
+        "port": 6641,
+        "user": "ktaydmsf",
+        "pass": "4vekfhbujejh"
+      }
+    }
+  },
+  "metrics": {
+    "LATAF": {
+      "username": "LATAF",
+      "currentMoney": 9241.67,
+      "dailyMoney": 815058.2900000002,
+      "dropsSoldPacks": 6366.265625,
+      "mobsKilled": 0,
+      "connectTime": 1792948341678,
+      "isVip": true
+    },
+    "FatalAmante2": {
+      "username": "FatalAmante2",
+      "currentMoney": 26768.99,
+      "dailyMoney": 458971.04,
+      "dropsSoldPacks": 6467.6875,
+      "mobsKilled": 0,
+      "connectTime": 1792948342206,
+      "isVip": false
+    },
+    "FatalAmante4": {
+      "username": "FatalAmante4",
+      "currentMoney": 13383.67,
+      "dailyMoney": 500351.09,
+      "dropsSoldPacks": 6881.65625,
+      "mobsKilled": 0,
+      "connectTime": 1792948342290,
+      "isVip": false
+    },
+    "FatalAmante": {
+      "username": "FatalAmante",
+      "currentMoney": 39604.54,
+      "dailyMoney": 624407.3499999999,
+      "dropsSoldPacks": 8344.40625,
+      "mobsKilled": 0,
+      "connectTime": 1792948342404,
+      "isVip": false
+    },
+    "FatalAmante3": {
+      "username": "FatalAmante3",
+      "currentMoney": 11362.07,
+      "dailyMoney": 493192.63999999966,
+      "dropsSoldPacks": 6560.671875,
+      "mobsKilled": 0,
+      "connectTime": 1792948342538,
+      "isVip": false
+    }
+  },
+  "diamondStock": {
+    "home": "diamante1",
+    "packs": 50.4375
+  },
+  "sharedState": {
+    "totalProfit": 2891980.4100000057,
+    "repairedSwordsCount": 48,
+    "usedSwordsCount": 2
+  }
+}

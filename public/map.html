@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Radar de Biomas - Craftlandia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased p-4 lg:p-6 flex flex-col">
+
+  <header class="max-w-[1750px] w-full mx-auto mb-4 flex items-center justify-between bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center text-lg border border-emerald-500/30">
+        <i class="fa-solid fa-compass"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-bold text-white flex items-center gap-2">
+          Radar de Biomas 2D <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono">1.8.9</span>
+        </h1>
+        <p class="text-xs text-slate-400">Prospecção autônoma de Taiga & Jungle com altitude Y=150</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <a href="/" class="text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1.5 transition-colors">
+        <i class="fa-solid fa-arrow-left"></i> Painel Principal
+      </a>
+    </div>
+  </header>
+
+  <main class="max-w-[1750px] w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-stretch">
+    <!-- Painel de Dados à Esquerda -->
+    <div class="lg:col-span-3 flex flex-col gap-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Status do Radar</div>
+        <div class="bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-1 text-xs">
+          <div class="flex justify-between"><span class="text-slate-400">Bot:</span> <span id="lbl-bot-name" class="font-bold text-indigo-400">--</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Coordenadas:</span> <span id="lbl-coords" class="font-mono text-emerald-400">0, 0, 0</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Bioma Atual:</span> <span id="lbl-biome" class="font-bold text-amber-400">Desconhecido</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">Chunks Visitadas:</span> <span id="lbl-chunks" class="font-bold text-sky-400">0</span></div>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 flex-1 flex flex-col">
+        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider flex justify-between">
+          <span>Biomas Marcados</span>
+          <span id="lbl-florestas-count" class="text-emerald-400 font-bold">0</span>
+        </div>
+        <div id="homes-list" class="space-y-1.5 overflow-y-auto max-h-[460px] pr-1 flex-1">
+          <div class="text-slate-600 text-xs italic text-center py-4">Nenhum bioma registrado ainda...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Canvas do Mapa à Direita -->
+    <div class="lg:col-span-9 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center relative shadow-inner overflow-hidden">
+      <div class="absolute top-6 left-6 z-10 bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300 flex items-center gap-3">
+        <span><i class="fa-solid fa-square text-emerald-500 mr-1"></i>Bot</span>
+        <span><i class="fa-solid fa-square text-sky-500/50 mr-1"></i>Chunks Visitadas</span>
+        <span><i class="fa-solid fa-location-dot text-amber-400 mr-1"></i>Homes Floresta</span>
+      </div>
+      <canvas id="mapCanvas" class="w-full h-full rounded-xl bg-slate-950 border border-slate-800/80 cursor-grab"></canvas>
+    </div>
+  </main>
+
+  <script>
+    const socket = io();
+    const canvas = document.getElementById('mapCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let telemetry = {
+      botName: '--',
+      pos: { x: 0, y: 150, z: 0 },
+      currentBiome: 'desconhecido',
+      florestaCount: 0,
+      discoveredHomes: [],
+      visitedChunksCount: 0
+    };
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth - 32;
+      canvas.height = canvas.parentElement.clientHeight - 32;
+      drawMap();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    socket.on('init_state', (data) => {
+      if (data.mapTelemetry) {
+        telemetry = data.mapTelemetry;
+        updateUI();
+      }
+    });
+
+    socket.on('map_telemetry_update', (data) => {
+      telemetry = data;
+      updateUI();
+    });
+
+    function updateUI() {
+      document.getElementById('lbl-bot-name').innerText = telemetry.botName || '--';
+      document.getElementById('lbl-coords').innerText = `X: ${telemetry.pos.x} | Y: ${telemetry.pos.y} | Z: ${telemetry.pos.z}`;
+      document.getElementById('lbl-biome').innerText = telemetry.currentBiome || 'Desconhecido';
+      document.getElementById('lbl-chunks').innerText = telemetry.visitedChunksCount || 0;
+      document.getElementById('lbl-florestas-count').innerText = telemetry.florestaCount || 0;
+
+      const list = document.getElementById('homes-list');
+      list.innerHTML = '';
+      if (!telemetry.discoveredHomes || telemetry.discoveredHomes.length === 0) {
+        list.innerHTML = '<div class="text-slate-600 text-xs italic text-center py-4">Nenhum bioma registrado ainda...</div>';
+      } else {
+        telemetry.discoveredHomes.slice().reverse().forEach((h) => {
+          const div = document.createElement('div');
+          div.className = 'p-2 rounded-xl bg-slate-950 border border-slate-800/80 text-xs flex justify-between items-center';
+          div.innerHTML = `
+            <div>
+              <div class="font-bold text-amber-400">/${h.name}</div>
+              <div class="text-[10px] text-slate-400">${h.biome}</div>
+            </div>
+            <div class="text-right font-mono text-[10px] text-slate-300">
+              ${h.x}, ${h.z}
+            </div>
+          `;
+          list.appendChild(div);
+        });
+      }
+      drawMap();
+    }
+
+    function drawMap() {
+      if (!canvas.width || !canvas.height) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const scale = 0.4; // 1 bloco = 0.4px
+
+      // Grade de Fundo
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      const gridSize = 64 * scale;
+      for (let x = 0; x < canvas.width; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+
+      const botX = telemetry.pos.x;
+      const botZ = telemetry.pos.z;
+
+      // Desenhar Casas Floresta
+      if (telemetry.discoveredHomes) {
+        telemetry.discoveredHomes.forEach((h) => {
+          const screenX = centerX + (h.x - botX) * scale;
+          const screenY = centerY + (h.z - botZ) * scale;
+
+          ctx.fillStyle = '#fbbf24';
+          ctx.beginPath();
+          ctx.arc(screenX, screenY, 6, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.font = '10px monospace';
+          ctx.fillStyle = '#fef08a';
+          ctx.fillText(h.name, screenX + 8, screenY + 3);
+        });
+      }
+
+      // Posição do Bot (Centro)
+      ctx.fillStyle = '#10b981';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillText(`${telemetry.botName} (Y=${telemetry.pos.y})`, centerX + 10, centerY - 8);
+    }
+
+    setTimeout(resizeCanvas, 100);
+  </script>
+</body>
+</html>
