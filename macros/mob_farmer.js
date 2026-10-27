@@ -17,6 +17,10 @@ class MobFarmerMacro {
     this.lastInventoryCheck = 0;
     this.isHandlingAfk = false;
 
+    // Watchdog de 3 minutos sem atingir mobs
+    this.lastMobHitTimestamp = Date.now();
+    this.isExecutingSafehomeRecovery = false;
+
     this.chatListener = async (message) => {
       const raw = message.toString();
       const clean = raw.replace(/§[0-9a-fk-or]/gi, '').trim();
@@ -26,7 +30,7 @@ class MobFarmerMacro {
         .toLowerCase();
 
       if (lower.includes('voce ficou afk') || lower.includes('teleportado para um local seguro')) {
-        this.emitLog('⚠️ [ANTI-AFK] Kick por AFK detectado! Retornando para /home mob (Sem VIP)...');
+        this.emitLog('⚠️ [ANTI-AFK] Kick por AFK detectado! Retornando para /home mob (Sem VIP)...', true);
         this.handleAfkTeleport();
         return;
       }
@@ -45,7 +49,7 @@ class MobFarmerMacro {
             if (this.accumulatedBalance >= 1000000 && !this.isTransferring && this.config.username.toLowerCase() !== 'fatal') {
               this.isTransferring = true;
               const amountToSend = Math.floor(this.accumulatedBalance);
-              this.emitLog(`💰 Saldo individual acumulou 1kk (${amountToSend} Coins)! Enviando para Fatal em 2 etapas com 1s de intervalo...`);
+              this.emitLog(`💰 Saldo acumulou 1kk (${amountToSend} Coins)! Enviando para Fatal em 2 etapas...`);
 
               try {
                 this.bot.chat(`/money pay Fatal ${amountToSend}`);
@@ -53,11 +57,11 @@ class MobFarmerMacro {
                 await this.sleep(1000);
 
                 this.bot.chat(`/money pay Fatal ${amountToSend}`);
-                this.emitLog(`📤 [2/2] Confirmação enviada! Saldo individual zerado com sucesso.`);
+                this.emitLog(`📤 [2/2] Confirmação enviada! Saldo individual zerado.`);
                 this.sharedState.registerMoneyTransfer(this.config.username, amountToSend);
                 this.accumulatedBalance = 0;
               } catch (tErr) {
-                this.emitLog(`❌ Erro ao transferir money: ${tErr.message}`);
+                this.emitLog(`❌ Erro ao transferir money: ${tErr.message}`, true);
               } finally {
                 this.isTransferring = false;
               }
@@ -72,6 +76,7 @@ class MobFarmerMacro {
   async start() {
     this.running = true;
     this.isPaused = false;
+    this.lastMobHitTimestamp = Date.now();
     this.emitLog('⚔️ Macro Mata Mob sem VIP iniciada...');
 
     while (this.running) {
@@ -83,7 +88,7 @@ class MobFarmerMacro {
       try {
         await this.mainLoop();
       } catch (err) {
-        this.emitLog(`⚠️ Erro no ciclo de mobs: ${err.message}. Reiniciando em 3s...`);
+        this.emitLog(`⚠️ Erro no ciclo de mobs: ${err.message}. Reiniciando em 3s...`, true);
         this.stopMovement();
         await this.sleep(3000);
       }
@@ -98,6 +103,7 @@ class MobFarmerMacro {
 
   resume() {
     this.isPaused = false;
+    this.lastMobHitTimestamp = Date.now();
     this.emitLog('▶️ Macro retomada.');
   }
 
@@ -133,18 +139,7 @@ class MobFarmerMacro {
   }
 
   async teleportSafe(homeName) {
-    this.emitLog(`📍 Solicitando /${homeName}...`);
-
-    let teleportConfirmed = false;
-    const confirmListener = (msg) => {
-      const text = msg.toString().toLowerCase();
-      if (text.includes('teleportado')) {
-        teleportConfirmed = true;
-      }
-    };
-
-    this.bot.on('messagestr', confirmListener);
-    await this.sendCommand(`/${homeName}`, 500);
+    this.emitLog(`📍 Solicitando /${homeName}...`);  let teleportConfirmed = false; const confirmListener = (msg) => { const text = msg.toString().toLowerCase(); if (text.includes('teleportado')) { teleportConfirmed = true; } };  this.bot.on('messagestr', confirmListener); await this.sendCommand(`/${homeName}`, 500);
 
     const startTime = Date.now();
     while (!teleportConfirmed && Date.now() - startTime < 8500) {
@@ -171,11 +166,42 @@ class MobFarmerMacro {
       await this.sleep(1000);
       await this.teleportSafe('home mob');
       await this.ensureUsableSwordOrReplace();
+      this.lastMobHitTimestamp = Date.now();
       this.emitLog('✅ Retorno do AFK concluído!');
     } catch (e) {
-      this.emitLog(`Erro ao retornar do AFK: ${e.message}`);
+      this.emitLog(`Erro ao retornar do AFK: ${e.message}`, true);
     } finally {
       this.isHandlingAfk = false;
+    }
+  }
+
+  async handleNoMobInactivityWatchdog() {
+    if (this.isExecutingSafehomeRecovery || !this.running) return;
+    this.isExecutingSafehomeRecovery = true;
+    this.stopMovement();
+
+    this.emitLog('🚨 [WATCHDOG ERRO] 3 minutos sem abater nenhum mob! Indo para safehome...', true);
+
+    try {
+      this.emitLog('📍 Teleportando para /home fatal safehome...');
+      await this.teleportSafe('home fatal safehome');
+
+      this.emitLog('⏳ Aguardando repouso de 3 minutos em safehome...');
+      const waitStart = Date.now();
+      while (Date.now() - waitStart < 180000 && this.running && !this.isPaused) {
+        await this.sleep(5000);
+      }
+
+      this.emitLog('🔄 Tempo de repouso concluído. Retornando ao mob e reiniciando ciclo...');
+      await this.teleportSafe('home mob');
+      await this.ensureUsableSwordOrReplace();
+      this.lastMobHitTimestamp = Date.now();
+      this.emitLog('🎯 Retorno ao mob efetuado com sucesso!');
+    } catch (err) {
+      this.emitLog(`❌ Erro no procedimento de safehome: ${err.message}`, true);
+    } finally {
+      this.isExecutingSafehomeRecovery = false;
+      this.lastMobHitTimestamp = Date.now();
     }
   }
 
@@ -218,7 +244,7 @@ class MobFarmerMacro {
       } catch (e) {}
     }
 
-    this.emitLog('⚠️ Sem espada utilizável na mão. Iniciando conferência e troca...');
+    this.emitLog('⚠️ Sem espada utilizável na mão. Iniciando conferência e reposição...');
     const exchanged = await this.replaceSwordRoutine();
     return exchanged;
   }
@@ -263,7 +289,16 @@ class MobFarmerMacro {
   async replaceSwordRoutine() {
     await this.checkAndSellDrops(true);
 
-    this.emitLog('🔨 [TROCA] Indo até as homes de baú...');
+    const hasAnyBrokenSword = this.bot.inventory.items().some(
+      (it) => it && it.name === 'diamond_sword'
+    );
+
+    if (!hasAnyBrokenSword) {
+      this.sharedState.incrementLostSword(this.config.username);
+      this.emitLog(`⚠️ [ESPADA PERDIDA] A conta não possui nenhuma espada no inventário! Contador de espadas perdidas incrementado.`, true);
+    }
+
+    this.emitLog('🔨 [BAÚ DE ESPADAS] Indo buscar reposição...');
     const homes = ['home fatal repararespadas1', 'home fatal repararespadas2'];
     let swordExchanged = false;
 
@@ -274,7 +309,7 @@ class MobFarmerMacro {
 
       const chestBlock = this.getTargetChest();
       if (!chestBlock) {
-        this.emitLog(`❌ [ERRO] Nenhum baú localizado em /${home}. Tentando próxima home...`);
+        this.emitLog(`❌ [ERRO] Nenhum baú localizado em /${home}. Tentando próxima home...`, true);
         continue;
       }
 
@@ -282,18 +317,18 @@ class MobFarmerMacro {
       await this.bot.lookAt(chestBlock.position.offset(0.5, 0.5, 0.5), true);
       await this.sleep(600);
 
-      this.emitLog(`📦 [BAÚ] Abrindo ${home}...`);
+      this.emitLog(`📦 Abrindo baú em ${home}...`);
       let container = null;
       try {
         container = await this.bot.openContainer(chestBlock);
         await this.sleep(1800);
       } catch (openErr) {
-        this.emitLog(`❌ Falha ao abrir baú em /${home}: ${openErr.message}`);
+        this.emitLog(`❌ Falha ao abrir baú em /${home}:${openErr.message}`, true);
         continue;
       }
 
       if (!container || !this.bot.currentWindow) {
-        this.emitLog(`⚠️ Janela do baú não abriu em /${home}.`);
+        this.emitLog(`⚠️ Janela do baú não abriu em /${home}.`, true);
         continue;
       }
 
@@ -306,13 +341,11 @@ class MobFarmerMacro {
           }
         }
 
-        this.emitLog(`🔍 Espadas NOVAS (>= 1200 dur) em /${home}: ${freshInChest.length}`);
+        this.emitLog(`🔍 Espadas aptas (>= 1200 dur) em /${home}:${freshInChest.length}`);
 
         if (freshInChest.length === 0) {
-          this.emitLog(`⚠️ Sem espadas aptas em /${home}. Indo verificar o próximo baú...`);
-          if (this.bot.currentWindow) {
-            container.close();
-          }
+          this.emitLog(`⚠️ Sem espadas aptas em /${home}. Verificando próximo baú...`);
+          if (this.bot.currentWindow) container.close();
           await this.sleep(800);
           continue;
         }
@@ -339,20 +372,20 @@ class MobFarmerMacro {
           }
 
           if (emptyChestSlot !== null) {
-            this.emitLog(`📥 [DEVOLUÇÃO] Colocando espada gasta no slot vazio ${emptyChestSlot} do baú...`);
+            this.emitLog(`📥 Devolvendo espada gasta no slot vazio ${emptyChestSlot}...`);
             await this.bot.clickWindow(brokenSwordSlot, 0, 0);
             await this.sleep(600);
             await this.bot.clickWindow(emptyChestSlot, 0, 0);
             await this.sleep(600);
           } else {
-            this.emitLog(`📥 [DEVOLUÇÃO] Enviando via Shift-Click do slot ${brokenSwordSlot}...`);
+            this.emitLog(`📥 Devolvendo espada gasta via Shift-Click do slot ${brokenSwordSlot}...`);
             await this.bot.clickWindow(brokenSwordSlot, 0, 1);
             await this.sleep(600);
           }
         }
 
         const targetNew = freshInChest[0];
-        this.emitLog(`🗡️ [RETIRADA] Puxando UMA espada nova do slot ${targetNew.slot} (Dur: ${targetNew.dur})...`);
+        this.emitLog(`🗡️ Retirando espada nova do slot ${targetNew.slot} (Dur:${targetNew.dur})...`);
         await this.bot.clickWindow(targetNew.slot, 0, 1);
         await this.sleep(800);
 
@@ -364,10 +397,10 @@ class MobFarmerMacro {
           await this.sleep(800);
         }
 
-        this.emitLog(`✅ Troca concluída com sucesso em /${home}! Encerrando visita aos baús.`);
+        this.emitLog(`✅ Reposição concluída com sucesso em /${home}!`);
         break;
       } catch (err) {
-        this.emitLog(`❌ [ERRO NA MANIPULAÇÃO] /${home}: ${err.message}`);
+        this.emitLog(`❌ Erro na manipulação do baú: ${err.message}`, true);
         if (this.bot.currentWindow) {
           try { container.close(); } catch (e) {}
         }
@@ -378,7 +411,7 @@ class MobFarmerMacro {
     const hasValidSwordNow = currentInventorySword && this.getSwordDurability(currentInventorySword) >= 1000;
 
     if (!swordExchanged && !hasValidSwordNow) {
-      this.emitLog('❌ Nenhuma espada utilizável encontrada. Pausando para evitar mortes.');
+      this.emitLog('❌ Nenhuma espada utilizável encontrada. Pausando macro para evitar mortes.', true);
       this.pause();
       return false;
     }
@@ -389,15 +422,13 @@ class MobFarmerMacro {
       try {
         await this.bot.equip(bestSword, 'hand');
         await this.sleep(500);
-        this.emitLog(`⚔️ [EQUIPADA] Espada pronta na mão! Durabilidade: ${this.getSwordDurability(bestSword)}/1561.`);
-      } catch (e) {
-        this.emitLog(`⚠️ Erro ao equipar espada: ${e.message}`);
-      }
+        this.emitLog(`⚔️ Espada equipada na mão! Durabilidade: ${this.getSwordDurability(bestSword)}/1561.`);
+      } catch (e) {}
     }
 
-    this.emitLog('📍 [RETORNO] Teleportando de volta para /home mob...');
+    this.emitLog('📍 Teleportando de volta para /home mob...');
     await this.teleportSafe('home mob');
-    this.emitLog('🎯 Chegou no mob! Pronto para abater.');
+    this.lastMobHitTimestamp = Date.now();
     return true;
   }
 
@@ -416,11 +447,17 @@ class MobFarmerMacro {
     if (!hasSword) return;
 
     await this.teleportSafe('home mob');
+    this.lastMobHitTimestamp = Date.now();
     this.emitLog('🎯 Abatendo mobs continuamente...');
 
     while (this.running && !this.isPaused) {
-      if (this.isHandlingAfk) {
+      if (this.isHandlingAfk || this.isExecutingSafehomeRecovery) {
         await this.sleep(1000);
+        continue;
+      }
+
+      if (Date.now() - this.lastMobHitTimestamp >= 180000) {
+        await this.handleNoMobInactivityWatchdog();
         continue;
       }
 
@@ -439,7 +476,7 @@ class MobFarmerMacro {
       const dur = this.getSwordDurability(currentSword);
 
       if (!currentSword || currentSword.name !== 'diamond_sword' || dur < this.MIN_DURABILITY_THRESHOLD) {
-        this.emitLog(`🛡️ [BLINDAGEM] Espada gasta ou ausente (${dur}/1561 < ${this.MIN_DURABILITY_THRESHOLD}). Trocando nos baús...`);
+        this.emitLog(`🛡️ Espada gasta ou ausente (${dur}/1561 <${this.MIN_DURABILITY_THRESHOLD}). Trocando no baú...`);
         await this.replaceSwordRoutine();
         continue;
       }
@@ -454,12 +491,14 @@ class MobFarmerMacro {
         try {
           await this.bot.lookAt(mob.position.offset(0, mob.height * 0.8, 0), true);
           this.bot.attack(mob);
+          this.lastMobHitTimestamp = Date.now();
+          this.sharedState.registerMobHit(this.config.username);
 
           const afterHitSword = this.bot.heldItem;
           const afterHitDur = this.getSwordDurability(afterHitSword);
 
           if (!afterHitSword || afterHitSword.name !== 'diamond_sword' || afterHitDur < this.MIN_DURABILITY_THRESHOLD) {
-            this.emitLog(`🛡️ [ALERTA PÓS-HIT] Durabilidade caiu para ${afterHitDur}/1561 logo após o ataque! Trocando nos baús imediatamente...`);
+            this.emitLog(`🛡️ Durabilidade caiu para ${afterHitDur}/1561 logo após o ataque! Trocando no baú...`);
             await this.replaceSwordRoutine();
             continue;
           }

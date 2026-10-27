@@ -9,6 +9,7 @@ class MobVipMacro {
     this.running = false;
     this.isPaused = false;
 
+    // Slot 9 reservado exclusivamente para a espada de combate do próprio VIP
     this.PERSONAL_SWORD_SLOT = 9;
     this.MIN_DURABILITY_THRESHOLD = 150;
     this.accumulatedBalance = 0;
@@ -18,6 +19,10 @@ class MobVipMacro {
     this.lastInventoryCheck = 0;
     this.isHandlingAfk = false;
 
+    // Watchdog de 3 minutos sem atingir mobs
+    this.lastMobHitTimestamp = Date.now();
+    this.isExecutingSafehomeRecovery = false;
+
     this.chatListener = async (message) => {
       const raw = message.toString();
       const clean = raw.replace(/§[0-9a-fk-or]/gi, '').trim();
@@ -26,12 +31,14 @@ class MobVipMacro {
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase();
 
+      // Detecção de teleporte forçado por AFK
       if (lower.includes('voce ficou afk') || lower.includes('teleportado para um local seguro')) {
-        this.emitLog('⚠️ [ANTI-AFK] Kick por AFK detectado! Retornando ao mob (VIP)...');
+        this.emitLog('⚠️ [ANTI-AFK] Kick por AFK detectado! Retornando ao mob (VIP)...', true);
         this.handleAfkTeleport();
         return;
       }
 
+      // Leitura de venda e transferência de saldo para Fatal ao atingir 1kk
       if (clean.includes('Total recebido:') && clean.includes('Coins')) {
         const match = clean.match(/Total recebido:\s*([\d,\.]+)\s*Coins/i);
         if (match && match[1]) {
@@ -56,7 +63,7 @@ class MobVipMacro {
                 this.sharedState.registerMoneyTransfer(this.config.username, amountToSend);
                 this.accumulatedBalance = 0;
               } catch (tErr) {
-                this.emitLog(`❌ Erro na transferência VIP: ${tErr.message}`);
+                this.emitLog(`❌ Erro na transferência VIP: ${tErr.message}`, true);
               } finally {
                 this.isTransferring = false;
               }
@@ -71,6 +78,7 @@ class MobVipMacro {
   async start() {
     this.running = true;
     this.isPaused = false;
+    this.lastMobHitTimestamp = Date.now();
     this.emitLog('👑 Macro MOB VIP iniciada...');
 
     while (this.running) {
@@ -82,7 +90,7 @@ class MobVipMacro {
       try {
         await this.mainLoop();
       } catch (err) {
-        this.emitLog(`⚠️ Erro no ciclo VIP: ${err.message}. Reiniciando em 3s...`);
+        this.emitLog(`⚠️ Erro no ciclo VIP: ${err.message}. Reiniciando em 3s...`, true);
         this.stopMovement();
         await this.sleep(3000);
       }
@@ -97,6 +105,7 @@ class MobVipMacro {
 
   resume() {
     this.isPaused = false;
+    this.lastMobHitTimestamp = Date.now();
     this.emitLog('▶️ Macro VIP retomada.');
   }
 
@@ -146,11 +155,43 @@ class MobVipMacro {
       await this.sleep(1000);
       await this.teleportVip('home mob');
       await this.restorePersonalSwordToHand();
+      this.lastMobHitTimestamp = Date.now();
       this.emitLog('✅ Retorno do AFK VIP concluído!');
     } catch (e) {
-      this.emitLog(`Erro ao retornar do AFK: ${e.message}`);
+      this.emitLog(`Erro ao retornar do AFK: ${e.message}`, true);
     } finally {
       this.isHandlingAfk = false;
+    }
+  }
+
+  // Rotina de contingência: 3 minutos sem atingir mobs
+  async handleNoMobInactivityWatchdog() {
+    if (this.isExecutingSafehomeRecovery || !this.running) return;
+    this.isExecutingSafehomeRecovery = true;
+    this.stopMovement();
+
+    this.emitLog('🚨 [WATCHDOG ERRO] VIP há 3 minutos sem atingir nenhum mob! Indo para safehome...', true);
+
+    try {
+      this.emitLog('📍 Teleportando para /home fatal safehome...');
+      await this.teleportVip('home fatal safehome');
+
+      this.emitLog('⏳ Aguardando repouso de 3 minutos em safehome...');
+      const waitStart = Date.now();
+      while (Date.now() - waitStart < 180000 && this.running && !this.isPaused) {
+        await this.sleep(5000);
+      }
+
+      this.emitLog('🔄 Tempo de repouso concluído. Retornando ao mob e reiniciando ciclo...');
+      await this.teleportVip('home mob');
+      await this.restorePersonalSwordToHand();
+      this.lastMobHitTimestamp = Date.now();
+      this.emitLog('🎯 Retorno ao mob efetuado com sucesso!');
+    } catch (err) {
+      this.emitLog(`❌ Erro no procedimento de safehome: ${err.message}`, true);
+    } finally {
+      this.isExecutingSafehomeRecovery = false;
+      this.lastMobHitTimestamp = Date.now();
     }
   }
 
@@ -270,7 +311,7 @@ class MobVipMacro {
         container.close();
         await this.sleep(600);
       } catch (err) {
-        this.emitLog(`Erro ao abrir baú em /${home}: ${err.message}`);
+        this.emitLog(`Erro ao abrir baú em /${home}: ${err.message}`, true);
       }
     }
   }
@@ -293,6 +334,7 @@ class MobVipMacro {
 
     const items = this.bot.inventory.items();
     for (const item of items) {
+      // Libera slots 36 a 44 (hotbar) movendo itens não essenciais para o inventário
       if (item.slot >= 36 && item.slot <= 44) {
         let emptySlot = null;
         for (let s = 10; s <= 35; s++) {
@@ -305,7 +347,7 @@ class MobVipMacro {
         if (emptySlot !== null) {
           try {
             await this.bot.moveSlotItem(item.slot, emptySlot);
-            await this.sleep(500);
+            await this.sleep(400);
           } catch (e) {}
         }
       }
@@ -335,12 +377,12 @@ class MobVipMacro {
   }
 
   async fetchEmergencySwordFromChest() {
-    this.emitLog('🆘 [EMERGÊNCIA] VIP totalmente sem espada! Buscando reserva em /home fatal repararespadas1...');
+    this.emitLog('🆘 [EMERGÊNCIA] VIP sem espada! Buscando reserva em /home fatal repararespadas1...', true);
     await this.teleportVip('home fatal repararespadas1');
 
     const chest = this.getTargetChestInFront();
     if (!chest) {
-      this.emitLog('❌ Baú de emergência não encontrado.');
+      this.emitLog('❌ Baú de emergência não encontrado.', true);
       return false;
     }
 
@@ -360,14 +402,15 @@ class MobVipMacro {
         await this.sleep(600);
         await this.teleportVip('home mob');
         await this.restorePersonalSwordToHand();
+        this.lastMobHitTimestamp = Date.now();
         return true;
       } else {
-        this.emitLog('⚠️ Baú de reparos também não possui espadas aptas no momento.');
+        this.emitLog('⚠️ Baú de reparos também não possui espadas aptas no momento.', true);
         container.close();
         await this.sleep(600);
       }
     } catch (e) {
-      this.emitLog(`Falha ao abrir baú de emergência: ${e.message}`);
+      this.emitLog(`Falha ao abrir baú de emergência: ${e.message}`, true);
     }
 
     return false;
@@ -409,57 +452,63 @@ class MobVipMacro {
     this.emitLog('📍 [VIP RETORNO] Retornando para /home mob após conserto da espada própria...');
     await this.teleportVip('home mob');
     await this.restorePersonalSwordToHand();
+    this.lastMobHitTimestamp = Date.now();
     return true;
   }
 
+  // Repara todas as espadas quebradas do baú em lotes de 8 ou 9 até não sobrar nenhuma
   async repairSwordsInChestHome(homeName) {
     await this.teleportVip(homeName);
 
     const chest = this.getTargetChestInFront();
     if (!chest) {
-      this.emitLog(`❌ Baú não encontrado em /${homeName}.`);
+      this.emitLog(`❌ Baú não encontrado em /${homeName}.`, true);
       return;
     }
 
-    let hasBrokenSwordsInChest = true;
-    let cyclesWithoutProgress = 0;
+    let hasBrokenSwordsRemaining = true;
+    let batchNumber = 0;
+    let consecutiveEmptyCycles = 0;
 
-    while (hasBrokenSwordsInChest && this.running && !this.isPaused && cyclesWithoutProgress < 3) {
+    while (hasBrokenSwordsRemaining && this.running && !this.isPaused && consecutiveEmptyCycles < 2) {
       await this.securePersonalSwordAndClearHotbar();
 
-      this.emitLog(`📦 Acessando baú em /${homeName}...`);
+      this.emitLog(`📦 Inspecionando baú em /${homeName}...`);
       let container = null;
       try {
         container = await this.bot.openContainer(chest);
         await this.sleep(1200);
       } catch (err) {
-        this.emitLog(`Erro ao abrir baú: ${err.message}`);
+        this.emitLog(`Erro ao abrir baú: ${err.message}`, true);
         break;
       }
 
+      // Varre as espadas quebradas (< 500 dur) que estão dentro do baú
       const brokenInChest = container.slots.slice(0, container.inventoryStart).filter((it) => {
         return it && it.name === 'diamond_sword' && this.getSwordDurability(it) < 500;
       });
 
       if (brokenInChest.length === 0) {
-        this.emitLog(`✅ Nenhuma espada com durabilidade < 500 restante em /${homeName}.`);
-        hasBrokenSwordsInChest = false;
+        this.emitLog(`✅ Nenhuma espada quebrada (< 500 dur) restante em /${homeName}! Concluído.`);
+        hasBrokenSwordsRemaining = false;
         container.close();
         await this.sleep(600);
         break;
       }
 
+      batchNumber++;
+      // Retira no máximo 8 espadas para caber perfeitamente na hotbar junto da espada blindada no slot 9
       const batchToWithdraw = brokenInChest.slice(0, 8);
-      this.emitLog(`📥 Retirando lote de ${batchToWithdraw.length} espadas para reparo...`);
+      this.emitLog(`📥 [LOTE #${batchNumber}] Restam ${brokenInChest.length} espadas quebradas. Retirando ${batchToWithdraw.length} para a hotbar...`);
 
       let withdrawnCount = 0;
       for (const sw of batchToWithdraw) {
         try {
-          await this.bot.clickWindow(sw.slot, 0, 1);
-          await this.sleep(500);
+          await this.bot.clickWindow(sw.slot, 0, 1); // Shift-click direto para a hotbar
+          await this.sleep(450);
           withdrawnCount++;
         } catch (wErr) {
-          this.emitLog(`Falha ao retirar espada: ${wErr.message}`);
+          this.emitLog(`Falha ao retirar espada: ${wErr.message}`, true);
         }
       }
 
@@ -467,19 +516,22 @@ class MobVipMacro {
       await this.sleep(800);
 
       if (withdrawnCount === 0) {
-        cyclesWithoutProgress++;
+        consecutiveEmptyCycles++;
         continue;
+      } else {
+        consecutiveEmptyCycles = 0;
       }
 
-      this.emitLog('👀 Mirando no chão para reparar...');
+      // Mira para baixo para reparar no bloco de diamante
+      this.emitLog(`👀 Mirando no chão para reparar lote #${batchNumber}...`);
       await this.bot.look(this.bot.entity.yaw, -Math.PI / 2, true);
-      await this.sleep(1000);
+      await this.sleep(800);
 
       let currentSwordsToFix = this.bot.inventory.items().filter((it) => {
         return it.name === 'diamond_sword' && it.slot !== this.PERSONAL_SWORD_SLOT && this.getSwordDurability(it) < 500;
       });
 
-      this.emitLog(`🔨 Reparando individualmente ${currentSwordsToFix.length} espadas...`);
+      this.emitLog(`🔨 Reparando individualmente ${currentSwordsToFix.length} espadas do lote...`);
 
       for (let i = 0; i < currentSwordsToFix.length; i++) {
         if (!this.running || this.isPaused) break;
@@ -497,7 +549,7 @@ class MobVipMacro {
           attempts++;
           try {
             await this.bot.equip(brokenSword, 'hand');
-            await this.sleep(500);
+            await this.sleep(400);
           } catch (e) {}
 
           const blockBelow = this.bot.blockAt(this.bot.entity.position.offset(0, -1, 0));
@@ -511,22 +563,22 @@ class MobVipMacro {
             this.bot.activateItem();
           }
 
-          await this.sleep(1000);
+          await this.sleep(900);
 
           const held = this.bot.heldItem;
           const currentDur = this.getSwordDurability(held);
 
           if (currentDur >= 1400) {
-            this.emitLog(`✨ Espada reparada! Durabilidade: ${currentDur}/1561`);
             repaired = true;
             this.sharedState.addRepairedSwords(1, this.config.username);
           } else {
-            await this.sleep(1000);
+            await this.sleep(800);
           }
         }
       }
 
-      this.emitLog('📦 Devolvendo espadas reparadas ao baú...');
+      // Reabre o baú e devolve todas as espadas reparadas do inventário
+      this.emitLog(`📦 Devolvendo espadas reparadas do lote #${batchNumber} ao baú...`);
       try {
         container = await this.bot.openContainer(chest);
         await this.sleep(1200);
@@ -538,22 +590,21 @@ class MobVipMacro {
         for (const sw of repairedSwords) {
           try {
             await this.bot.clickWindow(sw.slot, 0, 1);
-            await this.sleep(500);
+            await this.sleep(450);
           } catch (dErr) {}
         }
 
         container.close();
         await this.sleep(800);
+        this.emitLog(`✨ Lote #${batchNumber} finalizado e devolvido com sucesso!`);
       } catch (err) {
-        this.emitLog(`Erro ao devolver espadas: ${err.message}`);
+        this.emitLog(`Erro ao devolver espadas: ${err.message}`, true);
       }
-
-      break;
     }
   }
 
   async repairFakeSwordsRoutine() {
-    this.emitLog('⚡ Quantidade de espadas usadas >= 3! Limpando drops antes de ir aos baús...');
+    this.emitLog('⚡ Quantidade de espadas usadas atingiu 10! Limpando drops antes de ir aos baús...');
 
     this.emitLog('📦 Executando /vender mobs antes de sair do mob...');
     this.bot.chat('/vender mobs');
@@ -564,6 +615,7 @@ class MobVipMacro {
 
     const totalToFix = this.sharedState.getUsedSwords();
 
+    // Executa o esvaziamento completo e reparo em lotes de 8/9 em 8/9
     await this.repairSwordsInChestHome('home fatal repararespadas1');
 
     if (totalToFix > 50) {
@@ -572,11 +624,12 @@ class MobVipMacro {
     }
 
     this.sharedState.setUsedSwords(0, `${this.config.username} (VIP)`);
-    this.emitLog('✨ Todas as espadas foram reparadas! Variável resetada para 0.');
+    this.emitLog('✨ Todas as espadas de todos os baús foram reparadas! Fila resetada para 0.');
 
     this.emitLog('📍 [VIP RETORNO] Teleportando de volta para /home mob...');
     await this.teleportVip('home mob');
     await this.restorePersonalSwordToHand();
+    this.lastMobHitTimestamp = Date.now();
     this.emitLog('⚔️ VIP pronto para retomar o combate!');
   }
 
@@ -593,16 +646,24 @@ class MobVipMacro {
   async mainLoop() {
     await this.teleportVip('home mob');
     await this.restorePersonalSwordToHand();
+    this.lastMobHitTimestamp = Date.now();
 
     this.emitLog('🎯 VIP combatendo mobs continuamente...');
 
     while (this.running && !this.isPaused) {
-      if (this.isHandlingAfk) {
+      if (this.isHandlingAfk || this.isExecutingSafehomeRecovery) {
         await this.sleep(1000);
         continue;
       }
 
-      if (this.sharedState.getUsedSwords() >= 3) {
+      // Watchdog de 3 minutos sem atingir mobs
+      if (Date.now() - this.lastMobHitTimestamp >= 180000) {
+        await this.handleNoMobInactivityWatchdog();
+        continue;
+      }
+
+      // Gatilho de 10 espadas quebradas
+      if (this.sharedState.getUsedSwords() >= 10) {
         await this.repairFakeSwordsRoutine();
         continue;
       }
@@ -619,7 +680,7 @@ class MobVipMacro {
           } else {
             const retrieved = await this.fetchEmergencySwordFromChest();
             if (!retrieved) {
-              this.emitLog('❌ VIP totalmente sem espadas no inventário e baús vazios. Aguardando 5s para checar novamente...');
+              this.emitLog('❌ VIP totalmente sem espadas no inventário e baús vazios. Aguardando 5s para checar novamente...', true);
               await this.sleep(5000);
             }
           }
@@ -644,6 +705,8 @@ class MobVipMacro {
         try {
           await this.bot.lookAt(mob.position.offset(0, mob.height * 0.8, 0), true);
           this.bot.attack(mob);
+          this.lastMobHitTimestamp = Date.now();
+          this.sharedState.registerMobHit(this.config.username);
 
           const afterHitSword = this.bot.heldItem;
           const afterHitDur = this.getSwordDurability(afterHitSword);

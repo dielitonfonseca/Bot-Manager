@@ -12,13 +12,9 @@ const { SocksClient } = require('socks');
 
 const resolveSrv = promisify(dns.resolveSrv);
 
-// --- BLINDAGEM GLOBAL CONTRA CRASHES INESPERADOS ---
 process.on('uncaughtException', (err) => {
   const errMsg = err && err.message ? err.message : String(err);
   console.error(`\x1b[31m[CRITICAL UNCAUGHT EXCEPTION PREVENTED]\x1b[0m ${errMsg}`);
-  if (err && err.code) {
-    console.error(`Código do erro: ${err.code} | Syscall: ${err.syscall || 'N/A'}`);
-  }
 });
 
 process.on('unhandledRejection', (reason) => {
@@ -78,7 +74,6 @@ class ConfigStorageManager {
             usedSwordsCount: 0
           }
         };
-        console.log(`💾 [STORAGE] Configurações carregadas (${Object.keys(this.data.accounts).length} contas, ${this.data.proxyList.length} proxies na lista).`);
       } else {
         this.save();
       }
@@ -118,17 +113,12 @@ class ConfigStorageManager {
     return this.data.proxyList || [];
   }
 
-  // Rotação de proxies: busca a próxima proxy válida da lista respeitando o teto de 2 contas
   getNextProxy(currentProxy, forUsername) {
-    if (!this.data.proxyList || this.data.proxyList.length === 0) {
-      return null;
-    }
+    if (!this.data.proxyList || this.data.proxyList.length === 0) return null;
 
     const accounts = this.data.accounts || {};
     const usageCount = new Map();
-    this.data.proxyList.forEach((_, idx) => {
-      usageCount.set(idx, 0);
-    });
+    this.data.proxyList.forEach((_, idx) => usageCount.set(idx, 0));
 
     Object.values(accounts).forEach((acc) => {
       if (acc.username.toLowerCase() === forUsername.toLowerCase()) return;
@@ -143,7 +133,6 @@ class ConfigStorageManager {
       }
     });
 
-    // Filtra proxies que sejam diferentes da que acabou de falhar
     let candidates = this.data.proxyList
       .map((p, idx) => ({ proxy: p, index: idx, count: usageCount.get(idx) || 0 }))
       .filter((item) => {
@@ -151,16 +140,10 @@ class ConfigStorageManager {
         return !(item.proxy.host === currentProxy.host && parseInt(item.proxy.port) === parseInt(currentProxy.port));
       });
 
-    // Prioriza proxies com menos de 2 contas alocadas
     const underLimit = candidates.filter((item) => item.count < 2);
-    if (underLimit.length > 0) {
-      candidates = underLimit;
-    }
+    if (underLimit.length > 0) candidates = underLimit;
 
-    if (candidates.length === 0) {
-      return { ...this.data.proxyList[0] };
-    }
-
+    if (candidates.length === 0) return { ...this.data.proxyList[0] };
     candidates.sort((a, b) => a.count - b.count);
     return { ...candidates[0].proxy };
   }
@@ -318,7 +301,8 @@ class SharedStateManager {
       currentMoney: 0,
       dailyMoney: 0,
       dropsSoldPacks: 0,
-      mobsKilled: 0,
+      lostSwordsCount: 0,
+      lastMobHitTime: Date.now(),
       connectTime: Date.now(),
       isVip
     };
@@ -329,20 +313,38 @@ class SharedStateManager {
     broadcastAccountMetrics(botName);
   }
 
-  registerMobKill(botName) {
+  incrementLostSword(botName) {
     const current = this.accountMetrics.get(botName) || {
       username: botName,
       currentMoney: 0,
       dailyMoney: 0,
       dropsSoldPacks: 0,
-      mobsKilled: 0,
+      lostSwordsCount: 0,
+      lastMobHitTime: Date.now(),
       connectTime: Date.now(),
       isVip: false
     };
 
-    current.mobsKilled = (current.mobsKilled || 0) + 1;
+    current.lostSwordsCount = (current.lostSwordsCount || 0) + 1;
     this.accountMetrics.set(botName, current);
     configStorage.updateMetrics(botName, current);
+    broadcastAccountMetrics(botName);
+  }
+
+  registerMobHit(botName) {
+    const current = this.accountMetrics.get(botName) || {
+      username: botName,
+      currentMoney: 0,
+      dailyMoney: 0,
+      dropsSoldPacks: 0,
+      lostSwordsCount: 0,
+      lastMobHitTime: Date.now(),
+      connectTime: Date.now(),
+      isVip: false
+    };
+
+    current.lastMobHitTime = Date.now();
+    this.accountMetrics.set(botName, current);
     broadcastAccountMetrics(botName);
   }
 
@@ -352,7 +354,8 @@ class SharedStateManager {
       currentMoney: 0,
       dailyMoney: 0,
       dropsSoldPacks: 0,
-      mobsKilled: 0,
+      lostSwordsCount: 0,
+      lastMobHitTime: Date.now(),
       connectTime: Date.now(),
       isVip: false
     };
@@ -379,7 +382,8 @@ class SharedStateManager {
       currentMoney: 0,
       dailyMoney: 0,
       dropsSoldPacks: 0,
-      mobsKilled: 0,
+      lostSwordsCount: 0,
+      lastMobHitTime: Date.now(),
       connectTime: Date.now(),
       isVip: false
     };
@@ -405,7 +409,7 @@ class SharedStateManager {
   async claimNextSwordSlot(botName) {
     this.usedSwordsCount++;
     this.saveState();
-    emitLog('SISTEMA', `📌 Espada #${this.usedSwordsCount} reservada por ${botName}. Total na fila para reparo: ${this.usedSwordsCount}`, true);
+    emitLog('SISTEMA', `📌 Espada #${this.usedSwordsCount} reservada por ${botName}. Total na fila: ${this.usedSwordsCount}`, true);
     broadcastSharedState();
     return this.usedSwordsCount;
   }
@@ -417,7 +421,7 @@ class SharedStateManager {
   setUsedSwords(val, author) {
     this.usedSwordsCount = Math.max(0, val);
     this.saveState();
-    emitLog('SISTEMA', `Variável [usedSwordsCount] alterada para ${this.usedSwordsCount} por ${author}.`, true);
+    emitLog('SISTEMA', `Fila de espadas ajustada para ${this.usedSwordsCount} por ${author}.`, true);
     broadcastSharedState();
   }
 
@@ -446,17 +450,18 @@ const botMetas = new Map();
 const reconnectTimers = new Map();
 const isReconnecting = new Set();
 
-function emitLog(username, message, isSystem = false) {
+function emitLog(username, message, isSystem = false, isError = false) {
   const time = new Date().toLocaleTimeString();
   const logData = {
     username: username || 'SISTEMA',
     message: message,
     time: time,
-    isSystem: isSystem
+    isSystem: isSystem,
+    isError: isError
   };
 
-  const prefix = isSystem ? `[SISTEMA]` : `[${username}]`;
-  console.log(`[${time}] ${prefix} ${message}`);
+  const tag = isError ? '[ERRO]' : (isSystem ? '[SISTEMA]' : `[${username}]`);
+  console.log(`[${time}] ${tag} ${message}`);
   io.emit('log_message', logData);
 }
 
@@ -480,7 +485,8 @@ function broadcastBotStatus(username) {
     isVip: meta.isVip,
     macroName: meta.macroName,
     paused: meta.paused,
-    connected: meta.connected
+    connected: meta.connected,
+    hasChatFailure: !!meta.hasChatFailure
   });
 }
 
@@ -507,9 +513,7 @@ function scheduleReconnect(username, botConfig) {
   const meta = botMetas.get(username);
   if (!meta || meta.manualDisconnect) return;
 
-  if (isReconnecting.has(username)) {
-    return;
-  }
+  if (isReconnecting.has(username)) return;
   isReconnecting.add(username);
 
   meta.connected = false;
@@ -518,19 +522,18 @@ function scheduleReconnect(username, botConfig) {
   let newConfig = { ...botConfig };
   let delay = 30000 + Math.floor(Math.random() * 6000);
 
-  // Se for conta SEM VIP e possuir proxy, rotaciona automaticamente para a próxima proxy da lista
   if (botConfig.macroType !== 'mob_vip' && botConfig.proxy) {
     const rotated = rotateProxyForAccount(username);
     if (rotated) {
       newConfig.proxy = rotated;
       botConfig.proxy = rotated;
-      delay = 6000 + Math.floor(Math.random() * 3000); // Tenta a nova proxy em apenas 6s a 9s
-      emitLog(username, `🔄 Proxy falhou. Alternando para nova proxy: ${rotated.host}:${rotated.port}. Reconectando em ${(delay / 1000).toFixed(0)}s...`);
+      delay = 6000 + Math.floor(Math.random() * 3000);
+      emitLog(username, `🔄 Proxy falhou. Rotacionando para: ${rotated.host}:${rotated.port}. Reconexão em ${(delay / 1000).toFixed(0)}s.`, false, true);
     } else {
-      emitLog(username, `⏳ Conexão/Proxy instável. Próxima tentativa em ${(delay / 1000).toFixed(0)}s...`);
+      emitLog(username, `⏳ Conexão/Proxy instável. Próxima tentativa em ${(delay / 1000).toFixed(0)}s...`, false, true);
     }
   } else {
-    emitLog(username, `⏳ Conexão/DNS instável. Próxima tentativa em ${(delay / 1000).toFixed(0)}s...`);
+    emitLog(username, `⏳ Conexão instável. Próxima tentativa em ${(delay / 1000).toFixed(0)}s...`, false, true);
   }
 
   const timer = setTimeout(() => {
@@ -545,6 +548,51 @@ function scheduleReconnect(username, botConfig) {
   }, delay);
 
   reconnectTimers.set(username, timer);
+}
+
+// Rotina de Teste Recíproco de Chat Local (Heartbeat)
+async function performChatHeartbeatCheck(username) {
+  const bot = activeBots.get(username);
+  const meta = botMetas.get(username);
+  if (!bot || !meta || !meta.connected || !meta.spawned) return;
+
+  const token = `!chk_${Math.random().toString(36).substring(2, 7)}`;
+  let tokenConfirmed = false;
+
+  const testListener = (msg) => {
+    if (msg.toString().includes(token)) {
+      tokenConfirmed = true;
+    }
+  };
+
+  bot.on('messagestr', testListener);
+
+  try {
+    bot.chat(token);
+  } catch (err) {
+    // Falha imediata de envio
+  }
+
+  // Aguarda até 12 segundos para o servidor ecoar a mensagem de volta
+  const startTime = Date.now();
+  while (!tokenConfirmed && Date.now() - startTime < 12000) {
+    await new Promise((r) => setTimeout(r, 400));
+  }
+
+  bot.removeListener('messagestr', testListener);
+
+  if (!tokenConfirmed) {
+    meta.hasChatFailure = true;
+    broadcastBotStatus(username);
+    emitLog(username, `🚨 [FALHA DE CHAT LOCAL] Mensagem de verificação (${token}) não foi confirmada pelo servidor após 12s! Possível dessincronização de proxy. Reiniciando bot...`, false, true);
+    
+    // Força desconexão e relogin
+    cleanupBot(username);
+    scheduleReconnect(username, meta.config);
+  } else {
+    meta.hasChatFailure = false;
+    broadcastBotStatus(username);
+  }
 }
 
 async function createBotInstance(botConfig) {
@@ -622,13 +670,13 @@ async function createBotInstance(botConfig) {
   try {
     bot = mineflayer.createBot(options);
   } catch (err) {
-    emitLog(username, `❌ Erro ao criar instância do bot: ${err.message}`);
+    emitLog(username, `❌ Erro fatal ao instanciar bot: ${err.message}`, false, true);
     scheduleReconnect(username, botConfig);
     return;
   }
 
   const earlyErrorHandler = (err) => {
-    emitLog(username, `⚠️ Falha de rede/DNS capturada: ${err ? err.message : 'Erro desconhecido'}`);
+    emitLog(username, `⚠️ Falha de rede/proxy/DNS: ${err ? err.message : 'Erro desconhecido'}`, false, true);
     handleDisconnectEvent('early_error');
   };
 
@@ -647,6 +695,7 @@ async function createBotInstance(botConfig) {
       macroName: friendlyMacroName,
       paused: false,
       connected: false,
+      hasChatFailure: false,
       password: password || null,
       spawned: false,
       manualDisconnect: false,
@@ -657,6 +706,7 @@ async function createBotInstance(botConfig) {
     meta.macroName = friendlyMacroName;
     meta.isVip = isVip;
     meta.config = botConfig;
+    meta.hasChatFailure = false;
   }
 
   meta.manualDisconnect = false;
@@ -664,7 +714,7 @@ async function createBotInstance(botConfig) {
   meta.spawned = false;
   activeBots.set(username, bot);
 
-  const botLogger = (msg) => emitLog(username, msg);
+  const botLogger = (msg, isErr = false) => emitLog(username, msg, false, isErr);
   let macroInstance = null;
 
   if (macroType === 'mob_vip') {
@@ -677,14 +727,14 @@ async function createBotInstance(botConfig) {
   let connectionHandled = false;
   const connectionTimeout = setTimeout(() => {
     if (!meta.connected) {
-      emitLog(username, '⚠️ Timeout ao aguardar resposta do servidor (proxy sem resposta)...');
+      emitLog(username, '⚠️ Timeout ao aguardar resposta do servidor (proxy sem retorno ou offline).', false, true);
       try { bot.quit(); } catch (e) {}
       handleDisconnectEvent('timeout');
     }
   }, 25000);
 
   bot._client.once('connect', () => {
-    emitLog(username, '🔌 Handshake estabelecido.');
+    emitLog(username, '🔌 Handshake de rede estabelecido.');
   });
 
   bot.once('login', () => {
@@ -735,6 +785,7 @@ async function createBotInstance(botConfig) {
 
     meta.connected = true;
     meta.spawned = true;
+    meta.hasChatFailure = false;
     emitLog(username, '✨ Spawn confirmado! Reiniciando macro...');
     broadcastBotStatus(username);
 
@@ -744,7 +795,8 @@ async function createBotInstance(botConfig) {
         currentMoney: 0,
         dailyMoney: 0,
         dropsSoldPacks: 0,
-        mobsKilled: 0,
+        lostSwordsCount: 0,
+        lastMobHitTime: Date.now(),
         connectTime: Date.now(),
         isVip
       };
@@ -756,6 +808,22 @@ async function createBotInstance(botConfig) {
     setTimeout(() => {
       bot.chat('/money');
     }, 4000);
+
+    // Teste de Chat Local imediato ao logar/spawnar (aguarda 6s após spawn)
+    setTimeout(() => {
+      if (activeBots.has(username) && meta.connected) {
+        performChatHeartbeatCheck(username);
+      }
+    }, 6000);
+
+    // Repete a verificação a cada 10 minutos (600.000 ms)
+    const chatHeartbeatInterval = setInterval(() => {
+      if (activeBots.has(username) && meta.connected) {
+        performChatHeartbeatCheck(username);
+      } else {
+        clearInterval(chatHeartbeatInterval);
+      }
+    }, 600000);
 
     const moneyInterval = setInterval(() => {
       if (activeBots.has(username) && meta.connected) {
@@ -773,7 +841,7 @@ async function createBotInstance(botConfig) {
     setTimeout(() => {
       emitInventoryData(username, bot);
       macroInstance.start().catch((err) => {
-        emitLog(username, `Erro na execução da macro: ${err.message}`);
+        emitLog(username, `Erro na execução da macro: ${err.message}`, false, true);
       });
     }, 2500);
   });
@@ -795,12 +863,12 @@ async function createBotInstance(botConfig) {
 
   bot.on('kicked', (reason) => {
     const text = typeof reason === 'object' ? JSON.stringify(reason) : reason;
-    emitLog(username, `Expulso: ${text}`);
+    emitLog(username, `❌ Desconectado (Expulso pelo servidor): ${text}`, false, true);
     handleDisconnectEvent('kicked');
   });
 
   bot.on('end', () => {
-    emitLog(username, 'Conexão encerrada pelo servidor.');
+    emitLog(username, '❌ Conexão encerrada pelo servidor (Socket End/Reset).', false, true);
     handleDisconnectEvent('end');
   });
 }
@@ -852,6 +920,59 @@ async function executeTwoStepTransfer(bot, username, targetUser, amount) {
   }, 1000);
 }
 
+// Watchdog Supervisor de 10 minutos
+function runConnectionWatchdogSupervisor() {
+  const allAccounts = Object.values(configStorage.getAccounts());
+  if (allAccounts.length === 0) return;
+
+  emitLog('SISTEMA', `🔍 [SUPERVISOR 10M] Verificando integridade das ${allAccounts.length} contas cadastradas...`, true);
+
+  let reconnectQueue = [];
+
+  allAccounts.forEach((acc) => {
+    const user = acc.username;
+    const meta = botMetas.get(user);
+    const bot = activeBots.get(user);
+    const isOnline = meta && meta.connected && meta.spawned && bot && bot._client && !bot._client.destroyed;
+
+    if (!meta || (!meta.manualDisconnect && !isOnline)) {
+      emitLog(user, `🚨 [WATCHDOG 10M ERRO] Conta detectada offline ou desincronizada! Preparando relogin...`, false, true);
+      reconnectQueue.push(acc);
+    }
+  });
+
+  if (reconnectQueue.length === 0) {
+    emitLog('SISTEMA', `✅ [SUPERVISOR 10M] Todas as contas ativas estão conectadas e operando normalmente.`, true);
+    return;
+  }
+
+  reconnectQueue.forEach((acc, idx) => {
+    setTimeout(() => {
+      if (acc.macroType !== 'mob_vip' && acc.proxy) {
+        const rotated = rotateProxyForAccount(acc.username);
+        if (rotated) {
+          acc.proxy = rotated;
+        }
+      }
+
+      cleanupBot(acc.username);
+
+      const pass = acc.useDefaultPassword ? configStorage.getDefaultPassword() : acc.password;
+      emitLog(acc.username, `🔄 [SUPERVISOR 10M] Reiniciando conexão e ativando macro...`);
+      createBotInstance({
+        username: acc.username,
+        password: pass,
+        host: acc.host,
+        port: acc.port,
+        macroType: acc.macroType,
+        proxy: acc.proxy
+      });
+    }, 1200 + idx * 1000);
+  });
+}
+
+setInterval(runConnectionWatchdogSupervisor, 600000);
+
 io.on('connection', (socket) => {
   const activeList = [];
   botMetas.forEach((meta, user) => {
@@ -860,7 +981,8 @@ io.on('connection', (socket) => {
       isVip: meta.isVip,
       macroName: meta.macroName,
       paused: meta.paused,
-      connected: meta.connected
+      connected: meta.connected,
+      hasChatFailure: !!meta.hasChatFailure
     });
   });
 
@@ -943,7 +1065,6 @@ io.on('connection', (socket) => {
 
     if (parsedProxies.length === 0) return;
 
-    // Salva a lista de proxies completa no config.json
     configStorage.setProxies(proxiesText, parsedProxies);
 
     const proxyPool = [];
@@ -979,7 +1100,7 @@ io.on('connection', (socket) => {
 
     io.emit('accounts_updated', configStorage.getAccounts());
     io.emit('proxies_updated', { proxiesText });
-    emitLog('SISTEMA', `🔄 Distribuição de proxies em lote concluída: ${assignedCount} contas atualizadas no disco.`, true);
+    emitLog('SISTEMA', `🔄 Distribuição de proxies em lote: ${assignedCount} contas atualizadas.`, true);
   });
 
   socket.on('toggle_pause', ({ username }) => {
@@ -1023,7 +1144,7 @@ io.on('connection', (socket) => {
       }, 1200 + idx * 600);
     });
 
-    emitLog('SISTEMA', `🔄 Reiniciando todas as ${accounts.length} contas salvas no disco...`, true);
+    emitLog('SISTEMA', `🔄 Reiniciando todas as ${accounts.length} contas cadastradas...`, true);
   });
 
   socket.on('bot_chat', ({ username, message }) => {

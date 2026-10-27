@@ -72,57 +72,64 @@
   "metrics": {
     "LATAF": {
       "username": "LATAF",
-      "currentMoney": 9241.67,
-      "dailyMoney": 815058.2900000002,
-      "dropsSoldPacks": 6366.265625,
+      "currentMoney": 734064.25,
+      "dailyMoney": 1584683.9399999997,
+      "dropsSoldPacks": 12416.53125,
       "mobsKilled": 0,
       "connectTime": 1792948341678,
-      "isVip": true
+      "isVip": true,
+      "lastMobHitTime": 1793064989101
     },
     "FatalAmante2": {
       "username": "FatalAmante2",
-      "currentMoney": 26768.99,
-      "dailyMoney": 458971.04,
-      "dropsSoldPacks": 6467.6875,
+      "currentMoney": 0.9900000000052387,
+      "dailyMoney": 554351.4799999997,
+      "dropsSoldPacks": 7776.34375,
       "mobsKilled": 0,
       "connectTime": 1792948342206,
-      "isVip": false
+      "isVip": false,
+      "lostSwordsCount": 2,
+      "lastMobHitTime": 1793064989257
     },
     "FatalAmante4": {
       "username": "FatalAmante4",
-      "currentMoney": 13383.67,
-      "dailyMoney": 500351.09,
-      "dropsSoldPacks": 6881.65625,
+      "currentMoney": 0,
+      "dailyMoney": 703299.8500000002,
+      "dropsSoldPacks": 9444.125,
       "mobsKilled": 0,
       "connectTime": 1792948342290,
-      "isVip": false
+      "isVip": false,
+      "lastMobHitTime": 1793064989258
     },
     "FatalAmante": {
       "username": "FatalAmante",
-      "currentMoney": 39604.54,
-      "dailyMoney": 624407.3499999999,
-      "dropsSoldPacks": 8344.40625,
+      "currentMoney": 0.15999999999985448,
+      "dailyMoney": 862121.25,
+      "dropsSoldPacks": 11660.625,
       "mobsKilled": 0,
       "connectTime": 1792948342404,
-      "isVip": false
+      "isVip": false,
+      "lastMobHitTime": 1793064988182
     },
     "FatalAmante3": {
       "username": "FatalAmante3",
-      "currentMoney": 11362.07,
-      "dailyMoney": 493192.63999999966,
-      "dropsSoldPacks": 6560.671875,
+      "currentMoney": 0.5699999999999363,
+      "dailyMoney": 607917.2999999996,
+      "dropsSoldPacks": 8159.671875,
       "mobsKilled": 0,
       "connectTime": 1792948342538,
-      "isVip": false
+      "isVip": false,
+      "lostSwordsCount": 1,
+      "lastMobHitTime": 1793064989257
     }
   },
   "diamondStock": {
     "home": "diamante1",
-    "packs": 50.4375
+    "packs": 50.09375
   },
   "sharedState": {
-    "totalProfit": 2891980.4100000057,
-    "repairedSwordsCount": 48,
-    "usedSwordsCount": 2
+    "totalProfit": 4312373.8200000115,
+    "repairedSwordsCount": 62,
+    "usedSwordsCount": 1
   }
 }

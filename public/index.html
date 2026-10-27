@@ -70,6 +70,13 @@
     .card-transition {
       transition: max-height 0.25s ease-in-out, opacity 0.2s ease-in-out;
     }
+    @keyframes pulse-fast {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.15); }
+    }
+    .animate-pulse-warning {
+      animation: pulse-fast 1s infinite;
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased p-4 lg:p-6">
@@ -84,7 +91,7 @@
         <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
           CL Macro Manager <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Solaris 1.8.9</span>
         </h1>
-        <p class="text-xs text-slate-400">Controle, proxies e armazenamento centralizado no servidor</p>
+        <p class="text-xs text-slate-400">Heartbeat de chat, auditoria de espadas perdidas e supervisor 10m</p>
       </div>
     </div>
 
@@ -109,7 +116,7 @@
       <div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-3">
         <i class="fa-solid fa-hourglass-half text-rose-400 text-lg"></i>
         <div>
-          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Espadas na Fila</div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Espadas na Fila (Meta: 10)</div>
           <div class="flex items-center gap-2">
             <span id="stat-used-swords" class="text-sm font-bold text-rose-400">0</span>
             <div class="flex items-center gap-1 ml-2">
@@ -142,7 +149,7 @@
         </div>
         <div id="card-add-account" class="p-4 space-y-3 card-transition">
 
-          <!-- Painel Recolhível: Configuração de Senha Padrão -->
+          <!-- Configuração de Senha Padrão -->
           <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
             <div class="flex items-center justify-between cursor-pointer" onclick="toggleCard('panel-default-password', this)">
               <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
@@ -163,7 +170,7 @@
             </div>
           </div>
 
-          <!-- Campos Nick (com Datalist Dropdown) e Senha -->
+          <!-- Campos Nick e Senha -->
           <div class="space-y-2">
             <div>
               <label class="block text-xs font-semibold text-slate-400 mb-1">Nick do Jogador</label>
@@ -234,7 +241,7 @@
         </div>
       </section>
 
-      <!-- CARD: Gerenciador e Distribuição em Massa de Proxies -->
+      <!-- CARD: Gerenciador de Proxies -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
           <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
@@ -247,9 +254,9 @@
         </div>
         <div id="card-proxy-dist" class="p-4 space-y-3 card-transition">
           <div class="text-[11px] text-slate-400 leading-relaxed">
-            Insira a lista de proxies (uma por linha) no formato <code class="text-amber-400 font-mono">ip:porta:usuario:senha</code>. O sistema salvará no JSON e distribuirá até <b class="text-white">2 contas Sem VIP por proxy</b>. Se alguma falhar, a rotação automática trocará por outra da lista.
+            Insira a lista de proxies no formato <code class="text-amber-400 font-mono">ip:porta:usuario:senha</code>. O sistema distribui até <b class="text-white">2 contas por proxy</b> e rotaciona em caso de falha.
           </div>
-          <textarea id="input-proxy-batch" rows="5" placeholder="45.38.107.97:6014:ktaydmsf:4vekfhbujejh&#10;64.137.96.74:6641:ktaydmsf:4vekfhbujejh" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono resize-y"></textarea>
+          <textarea id="input-proxy-batch" rows="5" placeholder="45.38.107.97:6014:ktaydmsf:4vekfhbujejh" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono resize-y"></textarea>
           <div class="flex justify-end">
             <button onclick="handleApplyBatchProxies()" class="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
               <i class="fa-solid fa-arrows-rotate text-xs"></i>
@@ -259,7 +266,7 @@
         </div>
       </section>
 
-      <!-- CARD 2: Contas Ativas -->
+      <!-- CARD 2: Contas Ativas (VIP no topo, alfabética e aviso de exclamação) -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60 flex-wrap gap-2">
           <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
@@ -268,7 +275,7 @@
             <span id="active-bots-count" class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 ml-1">0</span>
           </div>
           <div class="flex items-center gap-2">
-            <button onclick="handleReconnectAllBots()" class="text-xs font-bold bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 shadow-sm" title="Desconecta e reconecta todas as contas cadastradas">
+            <button onclick="handleReconnectAllBots()" class="text-xs font-bold bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 shadow-sm" title="Desconecta e reconecta todas as contas">
               <i class="fa-solid fa-rotate text-[11px]"></i>
               <span>Reconectar Todas</span>
             </button>
@@ -320,7 +327,7 @@
     <!-- COLUNA DA DIREITA (8 colunas): Logs, Chat e os 2 Cards Inferiores -->
     <div class="lg:col-span-8 flex flex-col gap-6 w-full">
 
-      <!-- CARD 4: Terminal de Logs com Filtro por Conta -->
+      <!-- CARD 4: Terminal de Logs com Filtro Geral de Erros -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60 flex-wrap gap-2">
           <div class="flex items-center gap-3">
@@ -330,6 +337,7 @@
             </div>
             <select id="select-log-account" onchange="handleLogFilterChange()" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-sky-400 font-medium focus:outline-none focus:border-sky-500">
               <option value="all">Todas as Contas (Geral)</option>
+              <option value="__errors_only__" class="text-rose-400 font-bold">🚨 Apenas Erros (Todas as Contas)</option>
             </select>
           </div>
           <div class="flex items-center gap-2">
@@ -348,7 +356,7 @@
         </div>
       </section>
 
-      <!-- CARD 5: Chat Isolado por Conta (com Histórico Seta Cima/Baixo) -->
+      <!-- CARD 5: Chat Isolado por Conta -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60 flex-wrap gap-2">
           <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
@@ -374,7 +382,7 @@
         </div>
       </section>
 
-      <!-- SECÇÃO INFERIOR: Cards de Métricas e Estoque -->
+      <!-- SECÇÃO INFERIOR: Cards de Métricas e Performance -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
 
         <!-- CARD VERMELHO: Rendimentos em k/kk & Estoque -->
@@ -421,7 +429,7 @@
           </div>
         </section>
 
-        <!-- CARD AMARELO: Performance com Gráfico de Mobs/Hora -->
+        <!-- CARD AMARELO: Performance, Inatividade e Espadas Perdidas -->
         <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col justify-between">
           <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
             <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
@@ -448,16 +456,28 @@
               </div>
             </div>
 
-            <!-- Gráfico de Barras: Mobs por Hora -->
+            <!-- Monitor de Atividade e Espadas Perdidas -->
             <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl p-3 space-y-2">
               <div class="flex items-center justify-between text-xs">
                 <span class="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
-                  <i class="fa-solid fa-skull text-rose-400 text-xs"></i>
-                  Mobs por Hora
+                  <i class="fa-solid fa-stopwatch text-amber-400 text-xs"></i>
+                  Tempo Sem Abater Mob (Watchdog: 3m)
                 </span>
-                <span id="perf-mobs-rate-label" class="text-xs font-mono font-bold text-rose-400">0/h</span>
+                <span id="perf-last-hit-label" class="text-xs font-mono font-bold text-emerald-400">0s atrás</span>
               </div>
-              <div id="perf-mobs-bars-container" class="space-y-1.5 max-h-24 overflow-y-auto pr-1"></div>
+              <div class="h-2 w-full bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                <div id="perf-inactivity-bar" class="h-full bg-emerald-500 rounded-full transition-all duration-300" style="width: 0%;"></div>
+              </div>
+              <div class="flex justify-between items-center text-[10px] text-slate-400">
+                <span class="flex items-center gap-1">
+                  <i class="fa-solid fa-box text-slate-500"></i>
+                  Drops vendidos: <b id="perf-drops-sold-label" class="text-indigo-400">0.0 packs</b>
+                </span>
+                <span class="flex items-center gap-1">
+                  <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
+                  Espadas perdidas: <b id="perf-lost-swords-label" class="text-rose-400">0</b>
+                </span>
+              </div>
             </div>
 
             <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between text-xs">
@@ -504,19 +524,14 @@
 
     function formatCoinsCompact(val) {
       const num = Number(val) || 0;
-      if (num < 1000) {
-        return '0k';
-      }
+      if (num < 1000) return '0k';
       if (num >= 1000000) {
         const millions = num / 1000000;
         let formatted = millions.toFixed(1).replace('.', ',');
-        if (formatted.endsWith(',0')) {
-          formatted = formatted.slice(0, -2);
-        }
+        if (formatted.endsWith(',0')) formatted = formatted.slice(0, -2);
         return `${formatted}kk`;
       }
-      const thousands = Math.floor(num / 1000);
-      return `${thousands}k`;
+      return `${Math.floor(num / 1000)}k`;
     }
 
     function formatUptime(startTime) {
@@ -526,12 +541,8 @@
       const hours = Math.floor((totalSeconds % 86400) / 3600);
       const minutes = Math.floor((totalSeconds % 3600) / 60);
 
-      if (days >= 1) {
-        return `${days}d ${hours}h`;
-      }
-      if (hours >= 1) {
-        return `${hours}h ${minutes}m`;
-      }
+      if (days >= 1) return `${days}d ${hours}h`;
+      if (hours >= 1) return `${hours}h ${minutes}m`;
       return `${minutes}m`;
     }
 
@@ -549,9 +560,7 @@
 
     function updateDefaultPasswordUI() {
       const inputDef = document.getElementById('input-default-password');
-      if (inputDef) {
-        inputDef.value = defaultPassword || '';
-      }
+      if (inputDef) inputDef.value = defaultPassword || '';
       if (document.getElementById('check-use-default-pass').checked) {
         document.getElementById('input-password').value = defaultPassword || '';
       }
@@ -560,7 +569,6 @@
     function saveDefaultPassword() {
       const inputDef = document.getElementById('input-default-password');
       defaultPassword = inputDef.value.trim();
-
       socket.emit('save_default_password', { password: defaultPassword });
       updateDefaultPasswordUI();
       alert('Senha padrão salva com sucesso no disco do servidor!');
@@ -582,7 +590,6 @@
       const datalist = document.getElementById('saved-nicks-list');
       if (!datalist) return;
       datalist.innerHTML = '';
-
       Object.values(savedAccounts).forEach(acc => {
         const option = document.createElement('option');
         option.value = acc.username;
@@ -596,10 +603,7 @@
 
       const accountData = savedAccounts[cleanNick.toLowerCase()];
       if (accountData) {
-        if (accountData.macroType) {
-          document.getElementById('select-macro').value = accountData.macroType;
-        }
-
+        if (accountData.macroType) document.getElementById('select-macro').value = accountData.macroType;
         if (accountData.useDefaultPassword) {
           document.getElementById('check-use-default-pass').checked = true;
           toggleUseDefaultPassword(true);
@@ -636,11 +640,8 @@
 
     function toggleProxyInputs(show) {
       const container = document.getElementById('proxy-fields');
-      if (show) {
-        container.classList.remove('hidden');
-      } else {
-        container.classList.add('hidden');
-      }
+      if (show) container.classList.remove('hidden');
+      else container.classList.add('hidden');
     }
 
     function toggleCard(cardId, btn) {
@@ -705,21 +706,38 @@
       list.innerHTML = '';
 
       const currentSelectedLog = selectLog.value;
-      selectLog.innerHTML = '<option value="all">Todas as Contas (Geral)</option>';
+      selectLog.innerHTML = `
+        <option value="all">Todas as Contas (Geral)</option>
+        <option value="__errors_only__" class="text-rose-400 font-bold">🚨 Apenas Erros (Todas as Contas)</option>
+      `;
 
       if (allSavedKeys.length === 0) {
         list.innerHTML = '<div class="text-center py-6 text-xs text-slate-500">Nenhuma conta cadastrada no momento.</div>';
         return;
       }
 
+      const vipAccounts = [];
+      const nonVipAccounts = [];
+
       allSavedKeys.forEach((key) => {
         const acc = savedAccounts[key];
+        if (acc.macroType === 'mob_vip') vipAccounts.push(acc);
+        else nonVipAccounts.push(acc);
+      });
+
+      vipAccounts.sort((a, b) => a.username.localeCompare(b.username, 'pt-BR', { sensitivity: 'base' }));
+      nonVipAccounts.sort((a, b) => a.username.localeCompare(b.username, 'pt-BR', { sensitivity: 'base' }));
+
+      const sortedAccounts = [...vipAccounts, ...nonVipAccounts];
+
+      sortedAccounts.forEach((acc) => {
         const user = acc.username;
         const liveBot = botsMap.get(user);
         const isOnline = liveBot && liveBot.connected;
         const isPaused = liveBot && liveBot.paused;
         const isVip = acc.macroType === 'mob_vip';
         const hasProxy = acc.proxy && acc.proxy.host && acc.proxy.port;
+        const hasFailure = liveBot && liveBot.hasChatFailure;
 
         const opt = document.createElement('option');
         opt.value = user;
@@ -737,12 +755,14 @@
 
         item.innerHTML = `
           <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg ${isVip ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-300'} flex items-center justify-center font-bold text-xs">
+            <div class="w-8 h-8 rounded-lg ${isVip ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-300'} flex items-center justify-center font-bold text-xs relative">
               ${isVip ? 'VIP' : 'NAO'}
+              ${hasFailure ? '<span class="absolute -top-1 -right-1 text-xs text-rose-500 animate-pulse-warning font-black" title="Falha de chat/proxy detectada!">⚠️</span>' : ''}
             </div>
             <div>
               <div class="text-sm font-semibold text-white flex items-center gap-1.5 flex-wrap">
                 <span>${user}</span>
+                ${hasFailure ? '<span class="text-[10px] text-rose-400 font-bold uppercase tracking-wider bg-rose-950/60 border border-rose-800 px-1 rounded flex items-center gap-0.5"><i class="fa-solid fa-triangle-exclamation text-[9px]"></i> FALHA CHAT</span>' : ''}
                 ${hasProxy ? `<span class="text-[10px] text-amber-400 font-bold tracking-wider" title="${acc.proxy.host}:${acc.proxy.port}">(proxy: ${acc.proxy.host})</span>` : ''}
                 <span class="w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-600'}"></span>
               </div>
@@ -769,36 +789,25 @@
 
     function handleReconnectAllBots() {
       const accountsList = Object.values(savedAccounts);
-      if (accountsList.length === 0) {
-        alert('Nenhuma conta cadastrada para reconectar.');
-        return;
-      }
-
-      if (!confirm(`Deseja reiniciar a conexão de todas as ${accountsList.length} contas cadastradas no servidor?`)) {
-        return;
-      }
-
+      if (accountsList.length === 0) return;
+      if (!confirm(`Deseja reiniciar a conexão de todas as ${accountsList.length} contas cadastradas?`)) return;
       socket.emit('reconnect_all_bots');
     }
 
     function handleApplyBatchProxies() {
       const textarea = document.getElementById('input-proxy-batch');
       const text = textarea.value.trim();
-
       if (!text) {
         alert('Insira ao menos uma proxy no formato IP:Porta:Usuário:Senha');
         return;
       }
-
       socket.emit('apply_batch_proxies', { proxiesText: text });
-      alert('Solicitação de distribuição enviada! O servidor salvará no config.json e alternará as proxies automaticamente se alguma falhar.');
+      alert('Solicitação enviada! Proxies salvas no disco e distribuídas.');
     }
 
     function handleDeleteAccount(username) {
-      if (!confirm(`Deseja realmente excluir a conta ${username} do servidor (config.json)?`)) return;
-
+      if (!confirm(`Deseja realmente excluir a conta ${username} do servidor?`)) return;
       socket.emit('delete_account', { username });
-
       if (selectedBot === username) {
         selectedBot = null;
         document.getElementById('inv-selected-bot').innerText = '(Nenhum selecionado)';
@@ -816,19 +825,28 @@
       const filter = document.getElementById('select-log-account').value;
       container.innerHTML = '';
 
-      const filtered = filter === 'all' 
-        ? logsHistory 
-        : logsHistory.filter(l => l.username === filter || l.isSystem);
+      let filtered = [];
+      if (filter === '__errors_only__') {
+        filtered = logsHistory.filter(l => l.isError);
+      } else if (filter === 'all') {
+        filtered = logsHistory;
+      } else {
+        filtered = logsHistory.filter(l => l.username === filter || l.isSystem);
+      }
 
       if (filtered.length === 0) {
-        container.innerHTML = '<div class="text-slate-600">// Nenhum log registrado para este filtro.</div>';
+        container.innerHTML = `<div class="text-slate-600">// Nenhum log registrado para este filtro.</div>`;
         return;
       }
 
       filtered.forEach(log => {
         const div = document.createElement('div');
         div.className = 'leading-relaxed break-all';
-        div.innerHTML = `<span class="text-slate-500">[${log.time}]</span> <span class="font-semibold text-indigo-400">${log.username ? log.username : 'SISTEMA'}:</span> <span class="text-slate-200">${log.message}</span>`;
+        if (log.isError) {
+          div.innerHTML = `<span class="text-slate-500">[${log.time}]</span> <span class="bg-rose-950/80 text-rose-400 font-bold px-1.5 py-0.5 rounded border border-rose-800 text-[11px]">${log.username ? log.username : 'SISTEMA'}</span> <span class="text-rose-300 font-medium">${log.message}</span>`;
+        } else {
+          div.innerHTML = `<span class="text-slate-500">[${log.time}]</span> <span class="font-semibold text-indigo-400">${log.username ? log.username : 'SISTEMA'}:</span> <span class="text-slate-200">${log.message}</span>`;
+        }
         container.appendChild(div);
       });
 
@@ -910,9 +928,10 @@
       let totalAllMoney = 0;
       let totalAllDailyMoney = 0;
       let totalAllHourlyMoney = 0;
-      let totalAllMobsKilled = 0;
-      let totalAllMobsRate = 0;
+      let totalAllDropsSold = 0;
+      let totalAllLostSwords = 0;
       let earliestConnectTime = Date.now();
+      let mostCriticalInactiveSeconds = 0;
       let hasAccounts = accountStats.size > 0;
 
       const listEl = document.getElementById('metrics-accounts-list');
@@ -923,32 +942,30 @@
         }
       }
 
-      const accountMobsData = [];
-
       accountStats.forEach((stats, user) => {
         const curMoney = stats.currentMoney || 0;
         const daily = stats.dailyMoney || 0;
         const cTime = stats.connectTime || Date.now();
-        const mobs = stats.mobsKilled || 0;
+        const drops = stats.dropsSoldPacks || 0;
+        const lost = stats.lostSwordsCount || 0;
+        const lastHit = stats.lastMobHitTime || Date.now();
 
         totalAllMoney += curMoney;
         totalAllDailyMoney += daily;
-        totalAllMobsKilled += mobs;
+        totalAllDropsSold += drops;
+        totalAllLostSwords += lost;
+
+        const inactiveSeconds = Math.max(0, Math.floor((Date.now() - lastHit) / 1000));
+        if (inactiveSeconds > mostCriticalInactiveSeconds) {
+          mostCriticalInactiveSeconds = inactiveSeconds;
+        }
 
         if (cTime < earliestConnectTime) {
           earliestConnectTime = cTime;
         }
 
         const hoursConnected = Math.max(0.016, (Date.now() - cTime) / 3600000);
-        const mobRate = Math.round(mobs / hoursConnected);
         totalAllHourlyMoney += (daily / hoursConnected);
-        totalAllMobsRate += mobRate;
-
-        accountMobsData.push({
-          username: user,
-          rate: mobRate,
-          isVip: stats.isVip
-        });
 
         if (listEl) {
           const row = document.createElement('div');
@@ -970,8 +987,10 @@
       document.getElementById('metric-diamond-chest').innerText = diamondStockData.home || 'diamante1';
       document.getElementById('metric-diamond-packs').innerText = `(~${diamondStockData.packs.toFixed(1)} packs)`;
 
-      const barsContainer = document.getElementById('perf-mobs-bars-container');
-      const rateLabel = document.getElementById('perf-mobs-rate-label');
+      const hitLabel = document.getElementById('perf-last-hit-label');
+      const inactBar = document.getElementById('perf-inactivity-bar');
+      const dropsLabel = document.getElementById('perf-drops-sold-label');
+      const lostLabel = document.getElementById('perf-lost-swords-label');
 
       if (selectedBot && accountStats.has(selectedBot)) {
         const sel = accountStats.get(selectedBot);
@@ -983,22 +1002,17 @@
         const hourlyMoney = (sel.dailyMoney || 0) / hoursConnected;
         document.getElementById('perf-hourly-money').innerText = `${formatCoinsCompact(hourlyMoney)}/h`;
 
-        const mobRate = Math.round((sel.mobsKilled || 0) / hoursConnected);
-        rateLabel.innerText = `${mobRate}/h`;
+        const diffSec = Math.max(0, Math.floor((Date.now() - (sel.lastMobHitTime || Date.now())) / 1000));
+        hitLabel.innerText = `${diffSec}s atrás`;
 
-        const percent = Math.min(100, Math.max(5, Math.round((mobRate / 1500) * 100)));
-        barsContainer.innerHTML = `
-          <div class="space-y-1">
-            <div class="flex justify-between text-[10px] text-slate-400 font-medium">
-              <span>${selectedBot}</span>
-              <span class="text-rose-400 font-bold">${mobRate} mobs/h</span>
-            </div>
-            <div class="h-2 w-full bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-              <div class="h-full bg-gradient-to-r from-rose-500 to-amber-500 rounded-full transition-all duration-300" style="width: ${percent}%;"></div>
-            </div>
-          </div>
-        `;
+        const percent = Math.min(100, Math.max(0, (diffSec / 180) * 100));
+        inactBar.style.width = `${percent}%`;
+        if (percent >= 80) inactBar.className = 'h-full bg-rose-500 rounded-full transition-all duration-300';
+        else if (percent >= 50) inactBar.className = 'h-full bg-amber-500 rounded-full transition-all duration-300';
+        else inactBar.className = 'h-full bg-emerald-500 rounded-full transition-all duration-300';
 
+        dropsLabel.innerText = `${(sel.dropsSoldPacks || 0).toFixed(1)} packs`;
+        lostLabel.innerText = `${sel.lostSwordsCount || 0}`;
         document.getElementById('perf-session-time').innerText = `Tempo de sessão: ${formatUptime(sel.connectTime)}`;
       } else {
         document.getElementById('perf-target-account').innerText = 'Todas';
@@ -1006,28 +1020,15 @@
         document.getElementById('perf-today-money').innerText = formatCoinsCompact(totalAllDailyMoney);
         document.getElementById('perf-hourly-money').innerText = `${formatCoinsCompact(totalAllHourlyMoney)}/h`;
 
-        rateLabel.innerText = `${totalAllMobsRate}/h (total)`;
+        hitLabel.innerText = `Max: ${mostCriticalInactiveSeconds}s atrás`;
+        const percent = Math.min(100, Math.max(0, (mostCriticalInactiveSeconds / 180) * 100));
+        inactBar.style.width = `${percent}%`;
+        if (percent >= 80) inactBar.className = 'h-full bg-rose-500 rounded-full transition-all duration-300';
+        else if (percent >= 50) inactBar.className = 'h-full bg-amber-500 rounded-full transition-all duration-300';
+        else inactBar.className = 'h-full bg-emerald-500 rounded-full transition-all duration-300';
 
-        if (accountMobsData.length > 0) {
-          const maxRate = Math.max(...accountMobsData.map(d => d.rate), 100);
-          barsContainer.innerHTML = accountMobsData.map(item => {
-            const barWidth = Math.min(100, Math.max(6, Math.round((item.rate / maxRate) * 100)));
-            return `
-              <div class="space-y-0.5">
-                <div class="flex justify-between text-[10px] text-slate-400 font-medium">
-                  <span class="truncate max-w-[120px] ${item.isVip ? 'text-amber-300' : 'text-slate-300'}">${item.username}</span>
-                  <span class="text-rose-400 font-mono font-bold">${item.rate}/h</span>
-                </div>
-                <div class="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-                  <div class="h-full ${item.isVip ? 'bg-amber-500' : 'bg-rose-500'} rounded-full transition-all duration-300" style="width: ${barWidth}%;"></div>
-                </div>
-              </div>
-            `;
-          }).join('');
-        } else {
-          barsContainer.innerHTML = '<div class="text-[10px] text-slate-600 italic py-1 text-center">Nenhum dado de abate computado...</div>';
-        }
-
+        dropsLabel.innerText = `${totalAllDropsSold.toFixed(1)} packs (total)`;
+        lostLabel.innerText = `${totalAllLostSwords}`;
         if (hasAccounts) {
           document.getElementById('perf-session-time').innerText = `Tempo ativo: ${formatUptime(earliestConnectTime)}`;
         } else {
@@ -1179,9 +1180,7 @@
       }
       if (data.proxiesText) {
         const batchArea = document.getElementById('input-proxy-batch');
-        if (batchArea) {
-          batchArea.value = data.proxiesText;
-        }
+        if (batchArea) batchArea.value = data.proxiesText;
       }
       if (data.savedAccounts) {
         savedAccounts = data.savedAccounts;
@@ -1216,9 +1215,7 @@
 
     socket.on('proxies_updated', ({ proxiesText }) => {
       const batchArea = document.getElementById('input-proxy-batch');
-      if (batchArea && proxiesText) {
-        batchArea.value = proxiesText;
-      }
+      if (batchArea && proxiesText) batchArea.value = proxiesText;
     });
 
     socket.on('default_password_updated', ({ password }) => {
@@ -1235,9 +1232,7 @@
     socket.on('bot_status', (botData) => {
       botsMap.set(botData.username, botData);
       renderBotsList();
-      if (!selectedBot) {
-        updateMetricsDisplay();
-      }
+      if (!selectedBot) updateMetricsDisplay();
     });
 
     socket.on('bot_removed', ({ username }) => {
@@ -1259,15 +1254,11 @@
       userChats.push({ text: message, time: time || new Date().toLocaleTimeString() });
       if (userChats.length > 200) userChats.shift();
 
-      if (selectedBot === username) {
-        renderCurrentChat();
-      }
+      if (selectedBot === username) renderCurrentChat();
     });
 
     socket.on('inventory_data', ({ username, slots }) => {
-      if (selectedBot === username) {
-        updateInventoryDisplay(slots);
-      }
+      if (selectedBot === username) updateInventoryDisplay(slots);
     });
 
     socket.on('account_metrics_update', (data) => {
@@ -1285,7 +1276,7 @@
 
     setInterval(() => {
       updateMetricsDisplay();
-    }, 30000);
+    }, 1000);
   </script>
 </body>
 </html>
