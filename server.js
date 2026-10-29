@@ -50,7 +50,11 @@ class ConfigStorageManager {
       sharedState: {
         totalProfit: 0,
         repairedSwordsCount: 0,
-        usedSwordsCount: 0
+        usedSwordsCount: 0,
+        vipSellEnabled: false,
+        currentChestIndex: 1,
+        maxChestsBeforeSell: 10,
+        swordsRepairThreshold: 10
       }
     };
     this.load();
@@ -68,10 +72,14 @@ class ConfigStorageManager {
           accounts: parsed.accounts || {},
           metrics: parsed.metrics || {},
           diamondStock: parsed.diamondStock || { home: 'diamante1', packs: 0 },
-          sharedState: parsed.sharedState || {
-            totalProfit: 0,
-            repairedSwordsCount: 0,
-            usedSwordsCount: 0
+          sharedState: {
+            totalProfit: parsed.sharedState?.totalProfit || 0,
+            repairedSwordsCount: parsed.sharedState?.repairedSwordsCount || 0,
+            usedSwordsCount: parsed.sharedState?.usedSwordsCount || 0,
+            vipSellEnabled: parsed.sharedState?.vipSellEnabled ?? false,
+            currentChestIndex: parsed.sharedState?.currentChestIndex || 1,
+            maxChestsBeforeSell: parsed.sharedState?.maxChestsBeforeSell || 10,
+            swordsRepairThreshold: parsed.sharedState?.swordsRepairThreshold || 10
           }
         };
       } else {
@@ -96,7 +104,7 @@ class ConfigStorageManager {
   }
 
   getDefaultPassword() {
-    return this.data.defaultPassword;
+    return this.data.defaultPassword || '';
   }
 
   setProxies(proxiesText, proxyList) {
@@ -278,6 +286,10 @@ class SharedStateManager {
     this.totalProfit = persistedState.totalProfit || 0;
     this.repairedSwordsCount = persistedState.repairedSwordsCount || 0;
     this.usedSwordsCount = persistedState.usedSwordsCount || 0;
+    this.vipSellEnabled = persistedState.vipSellEnabled ?? false;
+    this.currentChestIndex = persistedState.currentChestIndex || 1;
+    this.maxChestsBeforeSell = persistedState.maxChestsBeforeSell || 10;
+    this.swordsRepairThreshold = persistedState.swordsRepairThreshold || 10;
     this.diamondStock = configStorage.getDiamondStock();
 
     this.accountMetrics = new Map();
@@ -285,6 +297,8 @@ class SharedStateManager {
     Object.keys(savedMetrics).forEach((user) => {
       this.accountMetrics.set(user, savedMetrics[user]);
     });
+
+    this.chestLock = false;
   }
 
   saveState() {
@@ -313,6 +327,19 @@ class SharedStateManager {
     broadcastAccountMetrics(botName);
   }
 
+  resetTotalProfit() {
+    this.totalProfit = 0;
+    this.accountMetrics.forEach((metric, botName) => {
+      metric.dailyMoney = 0;
+      this.accountMetrics.set(botName, metric);
+      configStorage.updateMetrics(botName, metric);
+      broadcastAccountMetrics(botName);
+    });
+    this.saveState();
+    broadcastSharedState();
+    emitLog('SISTEMA', '🧹 Lucro estimado global e rendimento de todas as contas zerados.', true);
+  }
+
   incrementLostSword(botName) {
     const current = this.accountMetrics.get(botName) || {
       username: botName,
@@ -329,6 +356,16 @@ class SharedStateManager {
     this.accountMetrics.set(botName, current);
     configStorage.updateMetrics(botName, current);
     broadcastAccountMetrics(botName);
+  }
+
+  resetAllLostSwords() {
+    this.accountMetrics.forEach((metric, botName) => {
+      metric.lostSwordsCount = 0;
+      this.accountMetrics.set(botName, metric);
+      configStorage.updateMetrics(botName, metric);
+    });
+    io.emit('all_lost_swords_reset');
+    emitLog('SISTEMA', '🧹 Contador de espadas perdidas resetado para zero em todas as contas.', true);
   }
 
   registerMobHit(botName) {
@@ -409,7 +446,7 @@ class SharedStateManager {
   async claimNextSwordSlot(botName) {
     this.usedSwordsCount++;
     this.saveState();
-    emitLog('SISTEMA', `📌 Espada #${this.usedSwordsCount} reservada por ${botName}. Total na fila: ${this.usedSwordsCount}`, true);
+    emitLog('SISTEMA', `📌 Espada #${this.usedSwordsCount} colocada na fila de reparo por ${botName}. Total: ${this.usedSwordsCount}`, true);
     broadcastSharedState();
     return this.usedSwordsCount;
   }
@@ -421,7 +458,7 @@ class SharedStateManager {
   setUsedSwords(val, author) {
     this.usedSwordsCount = Math.max(0, val);
     this.saveState();
-    emitLog('SISTEMA', `Fila de espadas ajustada para ${this.usedSwordsCount} por ${author}.`, true);
+    emitLog('SISTEMA', `Fila de reparo alterada para ${this.usedSwordsCount} por ${author}.`, true);
     broadcastSharedState();
   }
 
@@ -429,15 +466,73 @@ class SharedStateManager {
     const step = amount > 0 ? 1 : -1;
     this.usedSwordsCount = Math.max(0, this.usedSwordsCount + step);
     this.saveState();
-    emitLog('SISTEMA', `Fila de espadas ajustada para ${this.usedSwordsCount} por ${author}.`, true);
+    emitLog('SISTEMA', `Fila de reparo ajustada para ${this.usedSwordsCount} por ${author}.`, true);
     broadcastSharedState();
+  }
+
+  setVipSellEnabled(val) {
+    this.vipSellEnabled = !!val;
+    this.saveState();
+    broadcastSharedState();
+    emitLog('SISTEMA', `Venda VIP alterada para: ${this.vipSellEnabled ? 'LIGADA (Guarda em Baús)' : 'DESLIGADA (Venda Direta)'}`, true);
+  }
+
+  getVipSellEnabled() {
+    return this.vipSellEnabled;
+  }
+
+  getCurrentChestIndex() {
+    return this.currentChestIndex;
+  }
+
+  async advanceChestIndex(botName, reportedIndex) {
+    while (this.chestLock) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    this.chestLock = true;
+    try {
+      if (reportedIndex === this.currentChestIndex) {
+        this.currentChestIndex = Math.min(30, this.currentChestIndex + 1);
+        this.saveState();
+        emitLog('SISTEMA', `📦 [BAÚ LOTADO] ${botName} avançou o baú para venda${this.currentChestIndex}.`, true);
+        broadcastSharedState();
+      }
+      return this.currentChestIndex;
+    } finally {
+      this.chestLock = false;
+    }
+  }
+
+  adjustMaxChests(amount, author = 'Painel Web') {
+    this.maxChestsBeforeSell = Math.max(1, Math.min(30, this.maxChestsBeforeSell + (amount > 0 ? 1 : -1)));
+    this.saveState();
+    emitLog('SISTEMA', `Meta de baús antes de vender alterada para ${this.maxChestsBeforeSell} por ${author}.`, true);
+    broadcastSharedState();
+  }
+
+  adjustSwordsRepairThreshold(amount, author = 'Painel Web') {
+    this.swordsRepairThreshold = Math.max(1, Math.min(50, this.swordsRepairThreshold + (amount > 0 ? 1 : -1)));
+    this.saveState();
+    emitLog('SISTEMA', `Meta de espadas VIP para reparo alterada para ${this.swordsRepairThreshold} por ${author}.`, true);
+    broadcastSharedState();
+  }
+
+  resetCurrentChestIndex() {
+    this.currentChestIndex = 1;
+    this.saveState();
+    broadcastSharedState();
+    emitLog('SISTEMA', `📦 Índice de baús de venda resetado para venda1.`, true);
   }
 
   getState() {
     return {
       totalProfit: this.totalProfit,
       repairedSwordsCount: this.repairedSwordsCount,
-      usedSwordsCount: this.usedSwordsCount
+      usedSwordsCount: this.usedSwordsCount,
+      vipSellEnabled: this.vipSellEnabled,
+      currentChestIndex: this.currentChestIndex,
+      maxChestsBeforeSell: this.maxChestsBeforeSell,
+      swordsRepairThreshold: this.swordsRepairThreshold
     };
   }
 }
@@ -550,7 +645,6 @@ function scheduleReconnect(username, botConfig) {
   reconnectTimers.set(username, timer);
 }
 
-// Rotina de Teste Recíproco de Chat Local (Heartbeat)
 async function performChatHeartbeatCheck(username) {
   const bot = activeBots.get(username);
   const meta = botMetas.get(username);
@@ -569,11 +663,8 @@ async function performChatHeartbeatCheck(username) {
 
   try {
     bot.chat(token);
-  } catch (err) {
-    // Falha imediata de envio
-  }
+  } catch (err) {}
 
-  // Aguarda até 12 segundos para o servidor ecoar a mensagem de volta
   const startTime = Date.now();
   while (!tokenConfirmed && Date.now() - startTime < 12000) {
     await new Promise((r) => setTimeout(r, 400));
@@ -584,9 +675,7 @@ async function performChatHeartbeatCheck(username) {
   if (!tokenConfirmed) {
     meta.hasChatFailure = true;
     broadcastBotStatus(username);
-    emitLog(username, `🚨 [FALHA DE CHAT LOCAL] Mensagem de verificação (${token}) não foi confirmada pelo servidor após 12s! Possível dessincronização de proxy. Reiniciando bot...`, false, true);
-    
-    // Força desconexão e relogin
+    emitLog(username, `🚨 [FALHA DE CHAT LOCAL] Mensagem de verificação (${token}) não foi confirmada pelo servidor após 12s! Reiniciando bot...`, false, true);
     cleanupBot(username);
     scheduleReconnect(username, meta.config);
   } else {
@@ -596,7 +685,15 @@ async function performChatHeartbeatCheck(username) {
 }
 
 async function createBotInstance(botConfig) {
-  const { username, password, host, port, macroType, proxy } = botConfig;
+  const { username, host, port, macroType, proxy } = botConfig;
+
+  let resolvedPassword = (botConfig.password && botConfig.password.trim().length > 0)
+    ? botConfig.password.trim()
+    : configStorage.getDefaultPassword();
+
+  if (botConfig.useDefaultPassword) {
+    resolvedPassword = configStorage.getDefaultPassword();
+  }
 
   if (activeMacros.has(username)) {
     try { activeMacros.get(username).stop(); } catch (e) {}
@@ -696,7 +793,7 @@ async function createBotInstance(botConfig) {
       paused: false,
       connected: false,
       hasChatFailure: false,
-      password: password || null,
+      password: resolvedPassword,
       spawned: false,
       manualDisconnect: false,
       config: botConfig
@@ -706,6 +803,7 @@ async function createBotInstance(botConfig) {
     meta.macroName = friendlyMacroName;
     meta.isVip = isVip;
     meta.config = botConfig;
+    meta.password = resolvedPassword;
     meta.hasChatFailure = false;
   }
 
@@ -739,8 +837,21 @@ async function createBotInstance(botConfig) {
 
   bot.once('login', () => {
     clearTimeout(connectionTimeout);
-    emitLog(username, '🔑 Autenticado. Aguardando spawn do jogador...');
+    emitLog(username, '🔑 Autenticado na sessão. Aguardando spawn do jogador...');
   });
+
+  let loginAlreadySent = false;
+  const sendLoginCommand = () => {
+    if (loginAlreadySent) return;
+    const currentPass = meta.password || configStorage.getDefaultPassword();
+    if (currentPass && currentPass.trim().length > 0) {
+      loginAlreadySent = true;
+      bot.chat(`/login ${currentPass.trim()}`);
+      emitLog(username, '🔑 Comando /login enviado com sucesso.');
+    } else {
+      emitLog(username, '⚠️ Nenhuma senha salva ou configurada como padrão para efetuar o /login!', false, true);
+    }
+  };
 
   bot.on('messagestr', (message) => {
     const raw = message.toString().trim();
@@ -753,7 +864,25 @@ async function createBotInstance(botConfig) {
     });
 
     const clean = raw.replace(/§[0-9a-fk-or]/gi, '').trim();
-    const lower = clean.toLowerCase();
+    const lower = clean
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+    if (
+      lower.includes('/login') ||
+      lower.includes('registre-se') ||
+      lower.includes('por favor digite') ||
+      lower.includes('identifique-se') ||
+      lower.includes('digite sua senha') ||
+      lower.includes('use o comando')
+    ) {
+      setTimeout(sendLoginCommand, 500);
+    }
+
+    if (lower.includes('os menus de loja foram ativados') || lower.includes('menu de loja ativado')) {
+      bot.chat('/menuloja off');
+    }
 
     if (lower.includes('saldo atual:') && lower.includes('coins')) {
       const match = clean.match(/saldo atual:\s*([\d,\.]+)\s*Coins/i);
@@ -765,13 +894,6 @@ async function createBotInstance(botConfig) {
           emitLog(username, `💵 Saldo atualizado: ${val.toFixed(2)} Coins.`);
         }
       }
-    }
-
-    if ((lower.includes('/login') || lower.includes('registre-se') || lower.includes('por favor digite')) && meta.password) {
-      setTimeout(() => {
-        bot.chat(`/login ${meta.password}`);
-        emitLog(username, 'Comando /login enviado.');
-      }, 1000);
     }
   });
 
@@ -788,6 +910,14 @@ async function createBotInstance(botConfig) {
     meta.hasChatFailure = false;
     emitLog(username, '✨ Spawn confirmado! Reiniciando macro...');
     broadcastBotStatus(username);
+
+    setTimeout(() => {
+      sendLoginCommand();
+    }, 1200);
+
+    setTimeout(() => {
+      bot.chat('/menuloja off');
+    }, 2500);
 
     if (!sharedState.accountMetrics.has(username)) {
       const initialMetrics = {
@@ -807,16 +937,14 @@ async function createBotInstance(botConfig) {
 
     setTimeout(() => {
       bot.chat('/money');
-    }, 4000);
+    }, 4500);
 
-    // Teste de Chat Local imediato ao logar/spawnar (aguarda 6s após spawn)
     setTimeout(() => {
       if (activeBots.has(username) && meta.connected) {
         performChatHeartbeatCheck(username);
       }
-    }, 6000);
+    }, 7000);
 
-    // Repete a verificação a cada 10 minutos (600.000 ms)
     const chatHeartbeatInterval = setInterval(() => {
       if (activeBots.has(username) && meta.connected) {
         performChatHeartbeatCheck(username);
@@ -843,7 +971,7 @@ async function createBotInstance(botConfig) {
       macroInstance.start().catch((err) => {
         emitLog(username, `Erro na execução da macro: ${err.message}`, false, true);
       });
-    }, 2500);
+    }, 3000);
   });
 
   const handleDisconnectEvent = (reason) => {
@@ -920,7 +1048,6 @@ async function executeTwoStepTransfer(bot, username, targetUser, amount) {
   }, 1000);
 }
 
-// Watchdog Supervisor de 10 minutos
 function runConnectionWatchdogSupervisor() {
   const allAccounts = Object.values(configStorage.getAccounts());
   if (allAccounts.length === 0) return;
@@ -957,7 +1084,10 @@ function runConnectionWatchdogSupervisor() {
 
       cleanupBot(acc.username);
 
-      const pass = acc.useDefaultPassword ? configStorage.getDefaultPassword() : acc.password;
+      const pass = acc.useDefaultPassword || !acc.password
+        ? configStorage.getDefaultPassword()
+        : acc.password;
+
       emitLog(acc.username, `🔄 [SUPERVISOR 10M] Reiniciando conexão e ativando macro...`);
       createBotInstance({
         username: acc.username,
@@ -1004,13 +1134,37 @@ io.on('connection', (socket) => {
     emitLog('SISTEMA', '🔑 Senha padrão atualizada no disco (config.json).', true);
   });
 
+  socket.on('reset_total_profit', () => {
+    sharedState.resetTotalProfit();
+  });
+
+  socket.on('toggle_vip_sell', ({ enabled }) => {
+    sharedState.setVipSellEnabled(enabled);
+  });
+
+  socket.on('adjust_max_chests', ({ amount }) => {
+    sharedState.adjustMaxChests(amount, 'Painel Web');
+  });
+
+  socket.on('adjust_swords_repair_threshold', ({ amount }) => {
+    sharedState.adjustSwordsRepairThreshold(amount, 'Painel Web');
+  });
+
+  socket.on('reset_all_lost_swords', () => {
+    sharedState.resetAllLostSwords();
+  });
+
   socket.on('start_bot', (data) => {
     if (!data || !data.username) return;
 
+    const isUsingDefault = !!data.useDefaultPassword;
+    const finalPassword = isUsingDefault ? '' : (data.password || '');
+    const effectivePass = isUsingDefault ? configStorage.getDefaultPassword() : (data.password || '');
+
     configStorage.saveAccount({
       username: data.username,
-      useDefaultPassword: data.useDefaultPassword || false,
-      password: data.useDefaultPassword ? '' : (data.password || ''),
+      useDefaultPassword: isUsingDefault,
+      password: finalPassword,
       host: data.host || 'solaris.craftlandia.com.br',
       port: data.port || 25565,
       macroType: data.macroType || 'mob_farmer',
@@ -1019,12 +1173,9 @@ io.on('connection', (socket) => {
 
     io.emit('accounts_updated', configStorage.getAccounts());
 
-    const effectivePass = data.useDefaultPassword
-      ? configStorage.getDefaultPassword()
-      : data.password;
-
     createBotInstance({
       ...data,
+      useDefaultPassword: isUsingDefault,
       password: effectivePass
     });
   });
@@ -1086,7 +1237,10 @@ io.on('connection', (socket) => {
       cleanupBot(acc.username);
 
       setTimeout(() => {
-        const pass = acc.useDefaultPassword ? configStorage.getDefaultPassword() : acc.password;
+        const pass = acc.useDefaultPassword || !acc.password
+          ? configStorage.getDefaultPassword()
+          : acc.password;
+
         createBotInstance({
           username: acc.username,
           password: pass,
@@ -1132,7 +1286,10 @@ io.on('connection', (socket) => {
 
     accounts.forEach((acc, idx) => {
       setTimeout(() => {
-        const pass = acc.useDefaultPassword ? configStorage.getDefaultPassword() : acc.password;
+        const pass = acc.useDefaultPassword || !acc.password
+          ? configStorage.getDefaultPassword()
+          : acc.password;
+
         createBotInstance({
           username: acc.username,
           password: pass,
@@ -1148,6 +1305,22 @@ io.on('connection', (socket) => {
   });
 
   socket.on('bot_chat', ({ username, message }) => {
+    if (!message) return;
+
+    if (username === '__all__') {
+      emitLog('SISTEMA', `[CHAT GLOBAL ENVIADO PARA TODAS AS CONTAS] ${message}`, true);
+      let delay = 0;
+      activeBots.forEach((bot, user) => {
+        setTimeout(() => {
+          if (bot && bot._client && !bot._client.destroyed) {
+            bot.chat(message);
+          }
+        }, delay);
+        delay += 250;
+      });
+      return;
+    }
+
     const bot = activeBots.get(username);
     if (!bot) return;
 
@@ -1163,8 +1336,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('adjust_used_swords', ({ amount }) => {
-    const step = amount > 0 ? 1 : -1;
-    sharedState.adjustUsedSwords(step, 'Painel Web');
+    sharedState.adjustUsedSwords(amount, 'Painel Web');
   });
 
   socket.on('reset_used_swords', () => {
@@ -1199,7 +1371,10 @@ function autoStartAllPersistedAccounts() {
   console.log(`🚀 [AUTO-BOOT] Iniciando ${accounts.length} conta(s) salvas no disco em lote escalonado...`);
   accounts.forEach((acc, idx) => {
     setTimeout(() => {
-      const pass = acc.useDefaultPassword ? configStorage.getDefaultPassword() : acc.password;
+      const pass = acc.useDefaultPassword || !acc.password
+        ? configStorage.getDefaultPassword()
+        : acc.password;
+
       createBotInstance({
         username: acc.username,
         password: pass,

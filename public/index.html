@@ -81,7 +81,7 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased p-4 lg:p-6">
 
-  <!-- Topbar com Métricas Globais e Controle de Espadas -->
+  <!-- Topbar com Indicadores Globais, Slider Venda VIP e Contadores -->
   <header class="max-w-[1750px] mx-auto mb-6 flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
     <div class="flex items-center gap-3">
       <div class="w-11 h-11 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-xl font-bold border border-indigo-500/30 shadow-inner">
@@ -91,52 +91,102 @@
         <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
           CL Macro Manager <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Solaris 1.8.9</span>
         </h1>
-        <p class="text-xs text-slate-400">Heartbeat de chat, auditoria de espadas perdidas e supervisor 10m</p>
+        <p class="text-xs text-slate-400">Controle de Baús, Venda VIP e Monitoramento 24/7</p>
       </div>
     </div>
 
-    <!-- Indicadores Globais -->
+    <!-- Indicadores e Controles no Topo -->
     <div class="flex flex-wrap items-center gap-3">
-      <div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-3">
-        <i class="fa-solid fa-coins text-amber-400 text-lg"></i>
-        <div>
-          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Lucro Estimado</div>
-          <div id="stat-total-profit" class="text-sm font-bold text-amber-400">0k</div>
-        </div>
-      </div>
-      <div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-3">
-        <i class="fa-solid fa-screwdriver-wrench text-sky-400 text-lg"></i>
-        <div>
-          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Reparos Realizados</div>
-          <div id="stat-swords-repaired" class="text-sm font-bold text-sky-400">0</div>
-        </div>
-      </div>
       
-      <!-- Controle Manual da Fila de Espadas -->
+      <!-- SLIDER VENDA VIP (ON/OFF) -->
       <div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-3">
-        <i class="fa-solid fa-hourglass-half text-rose-400 text-lg"></i>
         <div>
-          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Espadas na Fila (Meta: 10)</div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Venda VIP</div>
+          <span id="vip-sell-status-label" class="text-xs font-extrabold text-slate-400">OFF</span>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input id="slider-vip-sell" type="checkbox" onchange="handleToggleVipSell(this.checked)" class="sr-only peer">
+          <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+        </label>
+      </div>
+
+      <!-- VISOR DO BAÚ ATUAL LOTADO (Exibido SOMENTE se Venda VIP estiver ON) -->
+      <div id="container-current-chest" class="hidden bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-3">
+        <i class="fa-solid fa-boxes-stacked text-amber-400 text-lg"></i>
+        <div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Baú de Venda Atual</div>
           <div class="flex items-center gap-2">
-            <span id="stat-used-swords" class="text-sm font-bold text-rose-400">0</span>
-            <div class="flex items-center gap-1 ml-2">
-              <button onclick="handleAdjustSwords(-1)" class="w-5 h-5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded flex items-center justify-center text-xs" title="Diminuir 1">-</button>
-              <button onclick="handleAdjustSwords(1)" class="w-5 h-5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded flex items-center justify-center text-xs" title="Aumentar 1">+</button>
-              <button onclick="handleResetSwords()" class="w-5 h-5 bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 rounded flex items-center justify-center text-[10px]" title="Zerar Fila"><i class="fa-solid fa-rotate-left"></i></button>
+            <span id="stat-current-chest" class="text-sm font-bold text-amber-400">venda1</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONTROLE META DE BAÚS (Exibido SOMENTE se Venda VIP estiver ON) -->
+      <div id="container-max-chests" class="hidden bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-3">
+        <i class="fa-solid fa-cart-shopping text-cyan-400 text-lg"></i>
+        <div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Meta Baús P/ Vender</div>
+          <div class="flex items-center gap-2">
+            <span id="stat-max-chests" class="text-sm font-bold text-cyan-400">10</span>
+            <div class="flex items-center gap-1 ml-1">
+              <button onclick="handleAdjustMaxChests(-1)" class="w-5 h-5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded flex items-center justify-center text-xs" title="Diminuir Meta de Baús">-</button>
+              <button onclick="handleAdjustMaxChests(1)" class="w-5 h-5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded flex items-center justify-center text-xs" title="Aumentar Meta de Baús">+</button>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- CONTROLE FILA DE REPARO + META DE REPARO + RESET DE ESPADAS PERDIDAS -->
+      <div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-3">
+        <i class="fa-solid fa-hourglass-half text-rose-400 text-lg"></i>
+        <div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Fila Reparo (Meta: <span id="stat-swords-threshold" class="text-rose-400 font-bold">10</span>)</div>
+          <div class="flex items-center gap-2">
+            <span id="stat-used-swords" class="text-sm font-bold text-rose-400">0</span>
+            <div class="flex items-center gap-1 ml-1">
+              <button onclick="handleAdjustSwords(-1)" class="w-5 h-5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded flex items-center justify-center text-xs" title="Diminuir Fila">-</button>
+              <button onclick="handleAdjustSwords(1)" class="w-5 h-5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded flex items-center justify-center text-xs" title="Aumentar Fila">+</button>
+              <button onclick="handleResetSwords()" class="w-5 h-5 bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 rounded flex items-center justify-center text-[10px]" title="Zerar Fila"><i class="fa-solid fa-rotate-left"></i></button>
+            </div>
+            
+            <div class="flex items-center gap-0.5 border-l border-slate-800 pl-1.5 ml-1">
+              <button onclick="handleAdjustSwordsThreshold(-1)" class="w-4 h-5 bg-slate-900 hover:bg-slate-800 text-slate-400 rounded text-[10px]" title="Diminuir Meta de Reparo">-</button>
+              <button onclick="handleAdjustSwordsThreshold(1)" class="w-4 h-5 bg-slate-900 hover:bg-slate-800 text-slate-400 rounded text-[10px]" title="Aumentar Meta de Reparo">+</button>
+            </div>
+
+            <div class="border-l border-slate-800 pl-1.5 ml-1">
+              <button onclick="handleResetAllLostSwords()" class="px-1.5 h-5 bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-300 rounded text-[10px] font-bold flex items-center gap-1" title="Zerar Contador de Espadas Perdidas de Todas as Contas">
+                <i class="fa-solid fa-trash-can text-[9px]"></i> Perdidas
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD LUCRO ESTIMADO COM BOTÃO DE RESET DISCRETO -->
+      <div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 flex items-center gap-3">
+        <i class="fa-solid fa-coins text-amber-400 text-lg"></i>
+        <div>
+          <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Lucro Estimado</div>
+          <div class="flex items-center gap-2">
+            <span id="stat-total-profit" class="text-sm font-bold text-amber-400">0k</span>
+            <button onclick="handleResetTotalProfit()" class="w-5 h-5 bg-amber-950/60 hover:bg-amber-900 border border-amber-800 text-amber-300 rounded flex items-center justify-center text-[10px]" title="Resetar Lucro Total e Rendimento por Conta">
+              <i class="fa-solid fa-rotate-left"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
     </div>
   </header>
 
   <!-- Layout Principal em Grid -->
   <main class="max-w-[1750px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-    <!-- COLUNA DA ESQUERDA (4 colunas): Cadastro, Distribuição de Proxy, Contas e Inventário -->
+    <!-- COLUNA DA ESQUERDA: Cadastro, Proxies, Contas e Inventário -->
     <div class="lg:col-span-4 flex flex-col gap-6 w-full">
 
-      <!-- CARD 1: Cadastrar Nova Conta -->
+      <!-- CARD 1: Cadastrar Conta -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
           <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
@@ -149,7 +199,6 @@
         </div>
         <div id="card-add-account" class="p-4 space-y-3 card-transition">
 
-          <!-- Configuração de Senha Padrão -->
           <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5">
             <div class="flex items-center justify-between cursor-pointer" onclick="toggleCard('panel-default-password', this)">
               <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
@@ -170,7 +219,6 @@
             </div>
           </div>
 
-          <!-- Campos Nick e Senha -->
           <div class="space-y-2">
             <div>
               <label class="block text-xs font-semibold text-slate-400 mb-1">Nick do Jogador</label>
@@ -209,7 +257,6 @@
             </select>
           </div>
 
-          <!-- Secção de Proxy Individual -->
           <div class="pt-2 border-t border-slate-800/80">
             <div class="flex items-center justify-between mb-2">
               <label class="flex items-center gap-2 cursor-pointer">
@@ -266,7 +313,7 @@
         </div>
       </section>
 
-      <!-- CARD 2: Contas Ativas (VIP no topo, alfabética e aviso de exclamação) -->
+      <!-- CARD 2: Contas Ativas (VIP no topo, alfabética e status online corrigido) -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60 flex-wrap gap-2">
           <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
@@ -275,9 +322,9 @@
             <span id="active-bots-count" class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 ml-1">0</span>
           </div>
           <div class="flex items-center gap-2">
-            <button onclick="handleReconnectAllBots()" class="text-xs font-bold bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 shadow-sm" title="Desconecta e reconecta todas as contas">
+            <button onclick="handleReconnectAllBots()" class="text-xs font-bold bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 shadow-sm" title="Reconectar Todas">
               <i class="fa-solid fa-rotate text-[11px]"></i>
-              <span>Reconectar Todas</span>
+              <span>Reconectar</span>
             </button>
             <button onclick="toggleCard('card-active-bots', this)" class="text-slate-400 hover:text-white transition-colors p-1">
               <i class="fa-solid fa-chevron-up"></i>
@@ -291,7 +338,7 @@
         </div>
       </section>
 
-      <!-- CARD 3: Inventário Gráfico Ajustado -->
+      <!-- CARD 3: Inventário -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60">
           <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
@@ -324,10 +371,10 @@
 
     </div>
 
-    <!-- COLUNA DA DIREITA (8 colunas): Logs, Chat e os 2 Cards Inferiores -->
+    <!-- COLUNA DA DIREITA: Logs, Chat e Performance -->
     <div class="lg:col-span-8 flex flex-col gap-6 w-full">
 
-      <!-- CARD 4: Terminal de Logs com Filtro Geral de Erros -->
+      <!-- CARD 4: Terminal de Logs -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60 flex-wrap gap-2">
           <div class="flex items-center gap-3">
@@ -356,13 +403,18 @@
         </div>
       </section>
 
-      <!-- CARD 5: Chat Isolado por Conta -->
+      <!-- CARD 5: Chat da Conta (com opção TODAS as contas) -->
       <section class="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg overflow-hidden flex flex-col">
         <div class="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/60 flex-wrap gap-2">
           <div class="flex items-center gap-2 font-semibold text-sm text-slate-200">
             <i class="fa-solid fa-comments text-indigo-400"></i>
             <span>Chat da Conta:</span>
-            <span id="chat-active-account" class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-semibold border border-indigo-500/20">Selecione uma conta</span>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="selectAllBotsChat()" id="chat-btn-all" class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 hover:text-white border border-slate-700 font-semibold transition-colors cursor-pointer" title="Enviar para todas as contas">
+                Todas
+              </button>
+              <span id="chat-active-account" class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-semibold border border-indigo-500/20">Selecione uma conta</span>
+            </div>
           </div>
           <button onclick="toggleCard('card-chat', this)" class="text-slate-400 hover:text-white transition-colors p-1">
             <i class="fa-solid fa-chevron-up"></i>
@@ -370,7 +422,7 @@
         </div>
         <div id="card-chat" class="card-transition flex-1 flex flex-col">
           <div id="chat-messages-container" class="h-64 lg:h-72 bg-slate-950 p-3 font-mono text-xs overflow-y-auto space-y-1.5 text-slate-300">
-            <div class="text-slate-600">// Selecione uma conta na lista à esquerda para interagir no chat.</div>
+            <div class="text-slate-600">// Selecione uma conta na lista à esquerda ou clique em "Todas" para interagir no chat.</div>
           </div>
           <form onsubmit="handleSendChat(event)" class="p-3 border-t border-slate-800 bg-slate-900 flex gap-2">
             <input id="input-chat-message" onkeydown="handleChatInputKeyDown(event)" type="text" placeholder="Digite uma mensagem ou comando (ex: /money)... [↑/↓ histórico]" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500" autocomplete="off">
@@ -382,7 +434,7 @@
         </div>
       </section>
 
-      <!-- SECÇÃO INFERIOR: Cards de Métricas e Performance -->
+      <!-- SECÇÃO INFERIOR: Métricas e Performance -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
 
         <!-- CARD VERMELHO: Rendimentos em k/kk & Estoque -->
@@ -456,7 +508,6 @@
               </div>
             </div>
 
-            <!-- Monitor de Atividade e Espadas Perdidas -->
             <div class="bg-slate-950/80 border border-slate-800/90 rounded-xl p-3 space-y-2">
               <div class="flex items-center justify-between text-xs">
                 <span class="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
@@ -508,6 +559,7 @@
     const socket = io();
 
     let selectedBot = null;
+    let isAllChatSelected = false;
     let botsMap = new Map();
     let logsHistory = [];
     let chatsHistory = new Map();
@@ -678,16 +730,34 @@
     }
     buildEmptyInventoryGrids();
 
+    function selectAllBotsChat() {
+      isAllChatSelected = true;
+      selectedBot = null;
+      document.getElementById('chat-btn-all').className = 'text-xs px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 border border-amber-400 font-bold transition-colors cursor-pointer shadow-sm';
+      document.getElementById('chat-active-account').innerText = 'TODAS AS CONTAS';
+      document.getElementById('chat-active-account').className = 'text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-bold border border-amber-500/30';
+      document.getElementById('inv-selected-bot').innerText = '(Nenhum selecionado)';
+      buildEmptyInventoryGrids();
+      renderBotsList();
+      renderCurrentChat();
+    }
+
     function selectBot(username) {
       if (selectedBot === username) {
         selectedBot = null;
+        isAllChatSelected = false;
+        document.getElementById('chat-btn-all').className = 'text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 hover:text-white border border-slate-700 font-semibold transition-colors cursor-pointer';
         document.getElementById('inv-selected-bot').innerText = '(Nenhum selecionado)';
         document.getElementById('chat-active-account').innerText = 'Selecione uma conta';
+        document.getElementById('chat-active-account').className = 'text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-semibold border border-indigo-500/20';
         buildEmptyInventoryGrids();
       } else {
         selectedBot = username;
+        isAllChatSelected = false;
+        document.getElementById('chat-btn-all').className = 'text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 hover:text-white border border-slate-700 font-semibold transition-colors cursor-pointer';
         document.getElementById('inv-selected-bot').innerText = `(${username})`;
         document.getElementById('chat-active-account').innerText = username;
+        document.getElementById('chat-active-account').className = 'text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-semibold border border-indigo-500/20';
         socket.emit('request_inventory', { username });
       }
       
@@ -733,8 +803,9 @@
       sortedAccounts.forEach((acc) => {
         const user = acc.username;
         const liveBot = botsMap.get(user);
-        const isOnline = liveBot && liveBot.connected;
-        const isPaused = liveBot && liveBot.paused;
+        
+        const isOnline = !!(liveBot && liveBot.connected);
+        const isPaused = !!(liveBot && liveBot.paused);
         const isVip = acc.macroType === 'mob_vip';
         const hasProxy = acc.proxy && acc.proxy.host && acc.proxy.port;
         const hasFailure = liveBot && liveBot.hasChatFailure;
@@ -753,6 +824,12 @@
         }`;
         item.onclick = () => selectBot(user);
 
+        let statusText = 'Desconectado';
+        if (isOnline) {
+          statusText = liveBot.macroName || (isVip ? 'Mata Mob (VIP)' : 'Mata Mob (Sem VIP)');
+          if (isPaused) statusText += ' [Pausado]';
+        }
+
         item.innerHTML = `
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 rounded-lg ${isVip ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-300'} flex items-center justify-center font-bold text-xs relative">
@@ -766,7 +843,7 @@
                 ${hasProxy ? `<span class="text-[10px] text-amber-400 font-bold tracking-wider" title="${acc.proxy.host}:${acc.proxy.port}">(proxy: ${acc.proxy.host})</span>` : ''}
                 <span class="w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-600'}"></span>
               </div>
-              <div class="text-[11px] text-slate-400">${isOnline ? (liveBot.macroName || 'Ativo') : 'Desconectado'}</div>
+              <div class="text-[11px] ${isOnline ? 'text-emerald-400 font-medium' : 'text-slate-400'}">${statusText}</div>
             </div>
           </div>
           <div class="flex items-center gap-1.5">
@@ -785,6 +862,63 @@
       });
 
       selectLog.value = currentSelectedLog;
+    }
+
+    function handleToggleVipSell(checked) {
+      const statusLabel = document.getElementById('vip-sell-status-label');
+      statusLabel.innerText = checked ? 'ON' : 'OFF';
+      statusLabel.className = `text-xs font-extrabold ${checked ? 'text-amber-400' : 'text-slate-400'}`;
+
+      const chestContainer = document.getElementById('container-current-chest');
+      const maxChestsContainer = document.getElementById('container-max-chests');
+      if (checked) {
+        chestContainer.classList.remove('hidden');
+        maxChestsContainer.classList.remove('hidden');
+      } else {
+        chestContainer.classList.add('hidden');
+        maxChestsContainer.classList.add('hidden');
+      }
+
+      socket.emit('toggle_vip_sell', { enabled: checked });
+    }
+
+    function handleAdjustMaxChests(amount) {
+      const el = document.getElementById('stat-max-chests');
+      let cur = parseInt(el.innerText) || 10;
+      cur = Math.max(1, Math.min(30, cur + amount));
+      el.innerText = cur;
+      socket.emit('adjust_max_chests', { amount });
+    }
+
+    function handleAdjustSwords(amount) {
+      const el = document.getElementById('stat-used-swords');
+      let cur = parseInt(el.innerText) || 0;
+      cur = Math.max(0, cur + amount);
+      el.innerText = cur;
+      socket.emit('adjust_used_swords', { amount });
+    }
+
+    function handleResetSwords() {
+      document.getElementById('stat-used-swords').innerText = '0';
+      socket.emit('reset_used_swords');
+    }
+
+    function handleAdjustSwordsThreshold(amount) {
+      const el = document.getElementById('stat-swords-threshold');
+      let cur = parseInt(el.innerText) || 10;
+      cur = Math.max(1, Math.min(50, cur + amount));
+      el.innerText = cur;
+      socket.emit('adjust_swords_repair_threshold', { amount });
+    }
+
+    function handleResetAllLostSwords() {
+      if (!confirm('Deseja zerar o contador de espadas perdidas de todas as contas?')) return;
+      socket.emit('reset_all_lost_swords');
+    }
+
+    function handleResetTotalProfit() {
+      if (!confirm('Deseja zerar o lucro estimado global e o rendimento de todas as contas?')) return;
+      socket.emit('reset_total_profit');
     }
 
     function handleReconnectAllBots() {
@@ -862,8 +996,13 @@
       const container = document.getElementById('chat-messages-container');
       container.innerHTML = '';
 
+      if (isAllChatSelected) {
+        container.innerHTML = '<div class="text-amber-400/80 font-bold">// Modo transmissão global ativado. Qualquer mensagem ou comando enviado será executado em TODAS as contas ativas.</div>';
+        return;
+      }
+
       if (!selectedBot) {
-        container.innerHTML = '<div class="text-slate-600">// Selecione uma conta na lista à esquerda para interagir no chat.</div>';
+        container.innerHTML = '<div class="text-slate-600">// Selecione uma conta na lista à esquerda ou clique em "Todas" para interagir no chat.</div>';
         return;
       }
 
@@ -1069,14 +1208,19 @@
       e.preventDefault();
       const input = document.getElementById('input-chat-message');
       const text = input.value.trim();
-      if (!text || !selectedBot) return;
+      if (!text) return;
+      if (!selectedBot && !isAllChatSelected) return;
 
       sentCommandsHistory.push(text);
       if (sentCommandsHistory.length > 50) sentCommandsHistory.shift();
       sentCommandsIndex = -1;
       currentCommandDraft = '';
 
-      socket.emit('bot_chat', { username: selectedBot, message: text });
+      if (isAllChatSelected) {
+        socket.emit('bot_chat', { username: '__all__', message: text });
+      } else {
+        socket.emit('bot_chat', { username: selectedBot, message: text });
+      }
       input.value = '';
     }
 
@@ -1084,7 +1228,8 @@
       const username = document.getElementById('input-username').value.trim();
       const useDefaultPass = document.getElementById('check-use-default-pass').checked;
       const rawPassword = document.getElementById('input-password').value.trim();
-      const password = useDefaultPass ? defaultPassword : rawPassword;
+      
+      const effectivePassword = useDefaultPass ? defaultPassword : rawPassword;
 
       const host = document.getElementById('input-server-host').value.trim() || 'solaris.craftlandia.com.br';
       const port = parseInt(document.getElementById('input-server-port').value) || 25565;
@@ -1107,7 +1252,7 @@
       socket.emit('start_bot', {
         username,
         useDefaultPassword: useDefaultPass,
-        password: useDefaultPass ? '' : password,
+        password: effectivePassword,
         host,
         port,
         macroType,
@@ -1126,14 +1271,14 @@
 
     function handleDisconnectBot(username) {
       const liveBot = botsMap.get(username);
-      const isOnline = liveBot && liveBot.connected;
+      const isOnline = !!(liveBot && liveBot.connected);
 
       if (isOnline) {
         socket.emit('stop_bot', { username });
       } else {
         const acc = savedAccounts[username.toLowerCase()];
         if (acc) {
-          const pass = acc.useDefaultPassword ? defaultPassword : acc.password;
+          const pass = acc.useDefaultPassword || !acc.password ? defaultPassword : acc.password;
           socket.emit('start_bot', {
             username: acc.username,
             useDefaultPassword: acc.useDefaultPassword,
@@ -1145,15 +1290,6 @@
           });
         }
       }
-    }
-
-    function handleAdjustSwords(direction) {
-      const step = direction > 0 ? 1 : -1;
-      socket.emit('adjust_used_swords', { amount: step });
-    }
-
-    function handleResetSwords() {
-      socket.emit('reset_used_swords');
     }
 
     function handleTransferAllToFatal() {
@@ -1173,6 +1309,33 @@
       socket.emit('transfer_single_to_fatal', { username: selectedBot });
     }
 
+    function updateSharedStateUI(state) {
+      if (!state) return;
+      document.getElementById('stat-total-profit').innerText = formatCoinsCompact(state.totalProfit);
+      document.getElementById('stat-swords-repaired').innerText = state.repairedSwordsCount;
+      document.getElementById('stat-used-swords').innerText = state.usedSwordsCount;
+
+      const isVipSell = !!state.vipSellEnabled;
+      document.getElementById('slider-vip-sell').checked = isVipSell;
+      const statusLabel = document.getElementById('vip-sell-status-label');
+      statusLabel.innerText = isVipSell ? 'ON' : 'OFF';
+      statusLabel.className = `text-xs font-extrabold ${isVipSell ? 'text-amber-400' : 'text-slate-400'}`;
+
+      const chestContainer = document.getElementById('container-current-chest');
+      const maxChestsContainer = document.getElementById('container-max-chests');
+      if (isVipSell) {
+        chestContainer.classList.remove('hidden');
+        maxChestsContainer.classList.remove('hidden');
+      } else {
+        chestContainer.classList.add('hidden');
+        maxChestsContainer.classList.add('hidden');
+      }
+
+      document.getElementById('stat-current-chest').innerText = `venda${state.currentChestIndex || 1}`;
+      document.getElementById('stat-max-chests').innerText = state.maxChestsBeforeSell || 10;
+      document.getElementById('stat-swords-threshold').innerText = state.swordsRepairThreshold || 10;
+    }
+
     socket.on('init_state', (data) => {
       if (data.defaultPassword !== undefined) {
         defaultPassword = data.defaultPassword;
@@ -1185,20 +1348,18 @@
       if (data.savedAccounts) {
         savedAccounts = data.savedAccounts;
         updateSavedNicksDropdown();
-        renderBotsList();
-      }
-      if (data.sharedState) {
-        document.getElementById('stat-total-profit').innerText = formatCoinsCompact(data.sharedState.totalProfit);
-        document.getElementById('stat-swords-repaired').innerText = data.sharedState.repairedSwordsCount;
-        document.getElementById('stat-used-swords').innerText = data.sharedState.usedSwordsCount;
-      }
-      if (data.diamondStock) {
-        diamondStockData = data.diamondStock;
       }
       if (data.activeBots) {
         botsMap.clear();
         data.activeBots.forEach(b => botsMap.set(b.username, b));
-        renderBotsList();
+      }
+      renderBotsList();
+
+      if (data.sharedState) {
+        updateSharedStateUI(data.sharedState);
+      }
+      if (data.diamondStock) {
+        diamondStockData = data.diamondStock;
       }
       if (data.allAccountMetrics) {
         accountStats.clear();
@@ -1224,9 +1385,7 @@
     });
 
     socket.on('state_update', (sharedState) => {
-      document.getElementById('stat-total-profit').innerText = formatCoinsCompact(sharedState.totalProfit);
-      document.getElementById('stat-swords-repaired').innerText = sharedState.repairedSwordsCount;
-      document.getElementById('stat-used-swords').innerText = sharedState.usedSwordsCount;
+      updateSharedStateUI(sharedState);
     });
 
     socket.on('bot_status', (botData) => {
@@ -1263,6 +1422,14 @@
 
     socket.on('account_metrics_update', (data) => {
       accountStats.set(data.username, data);
+      updateMetricsDisplay();
+    });
+
+    socket.on('all_lost_swords_reset', () => {
+      accountStats.forEach((metric, botName) => {
+        metric.lostSwordsCount = 0;
+        accountStats.set(botName, metric);
+      });
       updateMetricsDisplay();
     });
 

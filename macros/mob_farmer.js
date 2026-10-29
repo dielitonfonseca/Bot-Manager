@@ -9,7 +9,8 @@ class MobFarmerMacro {
     this.running = false;
     this.isPaused = false;
 
-    this.MIN_DURABILITY_THRESHOLD = 120;
+    // Limiar de troca preventiva aumentado para 350 para blindagem total contra quebra
+    this.MIN_DURABILITY_THRESHOLD = 350;
     this.accumulatedBalance = 0;
     this.isTransferring = false;
 
@@ -17,7 +18,6 @@ class MobFarmerMacro {
     this.lastInventoryCheck = 0;
     this.isHandlingAfk = false;
 
-    // Watchdog de 3 minutos sem atingir mobs
     this.lastMobHitTimestamp = Date.now();
     this.isExecutingSafehomeRecovery = false;
 
@@ -139,7 +139,18 @@ class MobFarmerMacro {
   }
 
   async teleportSafe(homeName) {
-    this.emitLog(`📍 Solicitando /${homeName}...`);  let teleportConfirmed = false; const confirmListener = (msg) => { const text = msg.toString().toLowerCase(); if (text.includes('teleportado')) { teleportConfirmed = true; } };  this.bot.on('messagestr', confirmListener); await this.sendCommand(`/${homeName}`, 500);
+    this.emitLog(`📍 Solicitando /${homeName}...`);
+
+    let teleportConfirmed = false;
+    const confirmListener = (msg) => {
+      const text = msg.toString().toLowerCase();
+      if (text.includes('teleportado')) {
+        teleportConfirmed = true;
+      }
+    };
+
+    this.bot.on('messagestr', confirmListener);
+    await this.sendCommand(`/${homeName}`, 500);
 
     const startTime = Date.now();
     while (!teleportConfirmed && Date.now() - startTime < 8500) {
@@ -244,34 +255,26 @@ class MobFarmerMacro {
       } catch (e) {}
     }
 
-    this.emitLog('⚠️ Sem espada utilizável na mão. Iniciando conferência e reposição...');
+    this.emitLog(`⚠️ Sem espada utilizável (limiar de segurança: ${this.MIN_DURABILITY_THRESHOLD}). Indo ao baú...`);
     const exchanged = await this.replaceSwordRoutine();
     return exchanged;
   }
 
-  countMobDropPacks() {
+  getMobDropsCount() {
     const dropNames = [
       'rotten_flesh', 'bone', 'arrow', 'string', 'spider_eye', 'gunpowder',
       'ender_pearl', 'leather', 'beef', 'cooked_beef', 'porkchop', 'cooked_porkchop',
       'chicken', 'cooked_chicken', 'feather', 'slime_ball', 'ghast_tear', 'blaze_rod'
     ];
-
-    const items = this.bot.inventory.items().filter((i) => dropNames.includes(i.name.toLowerCase()));
-    let totalItems = 0;
-    for (const it of items) totalItems += it.count;
-    return totalItems / 64;
+    return this.bot.inventory.items().filter((i) => dropNames.includes(i.name.toLowerCase()));
   }
 
-  async checkAndSellDrops(force = false) {
-    const packs = this.countMobDropPacks();
-    if (force || packs >= 18) {
-      this.emitLog(`📦 Limpando drops do inventário (~${packs.toFixed(1)} packs)...`);
-      this.sharedState.addDropsSold(this.config.username, packs);
-      await this.sendCommand('/vender mobs', 1200);
-      await this.sleep(800);
-      await this.sendCommand('/vender farms', 1200);
-      await this.sleep(1000);
+  countFilledSlots() {
+    let filled = 0;
+    for (let s = 9; s <= 44; s++) {
+      if (this.bot.inventory.slots[s]) filled++;
     }
+    return filled;
   }
 
   getTargetChest() {
@@ -286,19 +289,111 @@ class MobFarmerMacro {
     });
   }
 
-  async replaceSwordRoutine() {
-    await this.checkAndSellDrops(true);
+  async depositDropsToVipChestLoop() {
+    const targetDropNames = ['leather', 'beef', 'cooked_beef', 'cooked_steak', 'steak'];
 
-    const hasAnyBrokenSword = this.bot.inventory.items().some(
-      (it) => it && it.name === 'diamond_sword'
-    );
+    while (this.running && !this.isPaused) {
+      const dropsRemaining = this.bot.inventory.items().filter((i) => targetDropNames.includes(i.name.toLowerCase()));
+      if (dropsRemaining.length === 0) {
+        this.emitLog('✅ Inventário limpo de drops! Retornando ao mob...');
+        break;
+      }
 
-    if (!hasAnyBrokenSword) {
-      this.sharedState.incrementLostSword(this.config.username);
-      this.emitLog(`⚠️ [ESPADA PERDIDA] A conta não possui nenhuma espada no inventário! Contador de espadas perdidas incrementado.`, true);
+      let currentChestIdx = this.sharedState.getCurrentChestIndex();
+      const homeName = `home fatal venda${currentChestIdx}`;
+      this.emitLog(`📦 Indo descarregar drops em /${homeName}...`);
+
+      await this.teleportSafe(homeName);
+      const chestBlock = this.getTargetChest();
+      if (!chestBlock) {
+        this.emitLog(`❌ Baú de venda não encontrado em /${homeName}. Avançando baú...`, true);
+        await this.sharedState.advanceChestIndex(this.config.username, currentChestIdx);
+        continue;
+      }
+
+      await this.bot.lookAt(chestBlock.position.offset(0.5, 0.5, 0.5), true);
+      await this.sleep(400);
+
+      let container = null;
+      try {
+        container = await this.bot.openContainer(chestBlock);
+        await this.sleep(600);
+      } catch (e) {
+        this.emitLog(`Erro ao abrir baú em /${homeName}: ${e.message}`, true);
+        continue;
+      }
+
+      let chestFull = false;
+      const dropsToDeposit = container.slots.slice(container.inventoryStart).filter((it) => it && targetDropNames.includes(it.name.toLowerCase()));
+
+      for (const item of dropsToDeposit) {
+        try {
+          await this.bot.clickWindow(item.slot, 0, 1);
+          await this.sleep(60);
+        } catch (err) {
+          chestFull = true;
+          break;
+        }
+      }
+
+      const emptyInChest = container.slots.slice(0, container.inventoryStart).filter((s) => !s).length;
+      if (emptyInChest === 0 || chestFull) {
+        this.emitLog(`⚠️ Baú /${homeName} lotou! Avançando contador de baú...`);
+        container.close();
+        await this.sleep(500);
+        await this.sharedState.advanceChestIndex(this.config.username, currentChestIdx);
+      } else {
+        container.close();
+        await this.sleep(500);
+      }
     }
 
-    this.emitLog('🔨 [BAÚ DE ESPADAS] Indo buscar reposição...');
+    await this.teleportSafe('home mob');
+    await this.ensureUsableSwordOrReplace();
+    this.lastMobHitTimestamp = Date.now();
+  }
+
+  async checkAndHandleInventoryDischarge() {
+    const filledSlots = this.countFilledSlots();
+
+    if (filledSlots >= 27) {
+      if (this.sharedState.getVipSellEnabled()) {
+        this.emitLog(`📦 Inventário com ${filledSlots} slots cheios (>= 27). Guardando em baús...`);
+        await this.depositDropsToVipChestLoop();
+      } else {
+        this.emitLog(`📦 Inventário com ${filledSlots} slots cheios (>= 27). Vendendo direto...`);
+        const drops = this.getMobDropsCount();
+        let totalItems = 0;
+        for (const it of drops) totalItems += it.count;
+        this.sharedState.addDropsSold(this.config.username, totalItems / 64);
+
+        await this.sendCommand('/vender mobs', 1200);
+        await this.sleep(600);
+        await this.sendCommand('/vender farms', 1200);
+        await this.sleep(800);
+      }
+    }
+  }
+
+  async replaceSwordRoutine() {
+    const filledSlots = this.countFilledSlots();
+    if (filledSlots >= 27) {
+      await this.checkAndHandleInventoryDischarge();
+    }
+
+    // Varredura rigorosa: só considera sem espada se de fato não houver nenhuma
+    let hasAnySword = false;
+    for (let s = 9; s <= 44; s++) {
+      const it = this.bot.inventory.slots[s];
+      if (it && it.name === 'diamond_sword') {
+        hasAnySword = true;
+        break;
+      }
+    }
+
+    const wasCompletelyWithoutSword = !hasAnySword;
+
+    this.emitLog('🔨 [BAÚ DE ESPADAS] Verificando estoque de reposição...');
     const homes = ['home fatal repararespadas1', 'home fatal repararespadas2'];
     let swordExchanged = false;
 
@@ -309,26 +404,23 @@ class MobFarmerMacro {
 
       const chestBlock = this.getTargetChest();
       if (!chestBlock) {
-        this.emitLog(`❌ [ERRO] Nenhum baú localizado em /${home}. Tentando próxima home...`, true);
+        this.emitLog(`❌ [ERRO] Nenhum baú em /${home}. Tentando próxima home...`, true);
         continue;
       }
 
-      this.emitLog(`👀 Mirando no baú em ${chestBlock.position}...`);
       await this.bot.lookAt(chestBlock.position.offset(0.5, 0.5, 0.5), true);
       await this.sleep(600);
 
-      this.emitLog(`📦 Abrindo baú em ${home}...`);
       let container = null;
       try {
         container = await this.bot.openContainer(chestBlock);
         await this.sleep(1800);
       } catch (openErr) {
-        this.emitLog(`❌ Falha ao abrir baú em /${home}:${openErr.message}`, true);
+        this.emitLog(`❌ Falha ao abrir baú em /${home}: ${openErr.message}`, true);
         continue;
       }
 
       if (!container || !this.bot.currentWindow) {
-        this.emitLog(`⚠️ Janela do baú não abriu em /${home}.`, true);
         continue;
       }
 
@@ -341,15 +433,14 @@ class MobFarmerMacro {
           }
         }
 
-        this.emitLog(`🔍 Espadas aptas (>= 1200 dur) em /${home}:${freshInChest.length}`);
-
         if (freshInChest.length === 0) {
-          this.emitLog(`⚠️ Sem espadas aptas em /${home}. Verificando próximo baú...`);
+          this.emitLog(`⚠️ Sem espadas aptas (>= 1200) em /${home}.`);
           if (this.bot.currentWindow) container.close();
           await this.sleep(800);
           continue;
         }
 
+        // Localiza espada gasta do jogador (durabilidade < 500)
         let brokenSwordSlot = null;
         for (let s = container.inventoryStart; s < container.slots.length; s++) {
           const it = container.slots[s];
@@ -362,6 +453,7 @@ class MobFarmerMacro {
           }
         }
 
+        let depositedBroken = false;
         if (brokenSwordSlot !== null) {
           let emptyChestSlot = null;
           for (let s = 0; s < container.inventoryStart; s++) {
@@ -372,32 +464,40 @@ class MobFarmerMacro {
           }
 
           if (emptyChestSlot !== null) {
-            this.emitLog(`📥 Devolvendo espada gasta no slot vazio ${emptyChestSlot}...`);
             await this.bot.clickWindow(brokenSwordSlot, 0, 0);
-            await this.sleep(600);
+            await this.sleep(500);
             await this.bot.clickWindow(emptyChestSlot, 0, 0);
-            await this.sleep(600);
+            await this.sleep(500);
+            depositedBroken = true;
           } else {
-            this.emitLog(`📥 Devolvendo espada gasta via Shift-Click do slot ${brokenSwordSlot}...`);
             await this.bot.clickWindow(brokenSwordSlot, 0, 1);
-            await this.sleep(600);
+            await this.sleep(500);
+            depositedBroken = true;
           }
         }
 
+        // Retira a nova espada utilizável do baú
         const targetNew = freshInChest[0];
-        this.emitLog(`🗡️ Retirando espada nova do slot ${targetNew.slot} (Dur:${targetNew.dur})...`);
         await this.bot.clickWindow(targetNew.slot, 0, 1);
         await this.sleep(800);
 
         swordExchanged = true;
-        await this.sharedState.claimNextSwordSlot(this.config.username);
+
+        // Só incrementa o contador de espadas quebradas SE pegou a nova espada com sucesso
+        // E (estava sem espada OU devolveu uma gasta ao baú)
+        if (wasCompletelyWithoutSword || depositedBroken) {
+          await this.sharedState.claimNextSwordSlot(this.config.username);
+          if (wasCompletelyWithoutSword) {
+            this.emitLog(`⚔️ [REPOSIÇÃO CONFIRMADA] Conta estava sem espada: pegou uma nova no baú e incrementou o contador.`);
+          }
+        }
 
         if (this.bot.currentWindow) {
           container.close();
           await this.sleep(800);
         }
 
-        this.emitLog(`✅ Reposição concluída com sucesso em /${home}!`);
+        this.emitLog(`✅ Espada retirada com sucesso em /${home}.`);
         break;
       } catch (err) {
         this.emitLog(`❌ Erro na manipulação do baú: ${err.message}`, true);
@@ -411,7 +511,7 @@ class MobFarmerMacro {
     const hasValidSwordNow = currentInventorySword && this.getSwordDurability(currentInventorySword) >= 1000;
 
     if (!swordExchanged && !hasValidSwordNow) {
-      this.emitLog('❌ Nenhuma espada utilizável encontrada. Pausando macro para evitar mortes.', true);
+      this.emitLog('❌ Nenhuma espada utilizável encontrada. Pausando para evitar morte.', true);
       this.pause();
       return false;
     }
@@ -448,7 +548,9 @@ class MobFarmerMacro {
 
     await this.teleportSafe('home mob');
     this.lastMobHitTimestamp = Date.now();
-    this.emitLog('🎯 Abatendo mobs continuamente...');
+    this.emitLog('🎯 Abatendo mobs com proteção ativa contra quebra...');
+
+    let hitsUntilNextCheck = 1;
 
     while (this.running && !this.isPaused) {
       if (this.isHandlingAfk || this.isExecutingSafehomeRecovery) {
@@ -461,28 +563,45 @@ class MobFarmerMacro {
         continue;
       }
 
-      let currentSword = this.bot.heldItem;
-      if (!currentSword || currentSword.name !== 'diamond_sword') {
-        const bestInInv = this.getDiamondSword();
-        if (bestInInv && this.getSwordDurability(bestInInv) >= this.MIN_DURABILITY_THRESHOLD) {
-          try {
-            await this.bot.equip(bestInInv, 'hand');
-            await this.sleep(400);
-            currentSword = this.bot.heldItem;
-          } catch (e) {}
+      // Verificação preditiva periódica da espada
+      hitsUntilNextCheck--;
+      if (hitsUntilNextCheck <= 0) {
+        let currentSword = this.bot.heldItem;
+        if (!currentSword || currentSword.name !== 'diamond_sword') {
+          const bestInInv = this.getDiamondSword();
+          if (bestInInv && this.getSwordDurability(bestInInv) >= this.MIN_DURABILITY_THRESHOLD) {
+            try {
+              await this.bot.equip(bestInInv, 'hand');
+              await this.sleep(300);
+              currentSword = this.bot.heldItem;
+            } catch (e) {}
+          }
+        }
+
+        const dur = this.getSwordDurability(currentSword);
+
+        // Se atingir ou se aproximar do limiar de segurança (350), troca no baú
+        if (!currentSword || currentSword.name !== 'diamond_sword' || dur <= this.MIN_DURABILITY_THRESHOLD) {
+          this.emitLog(`🛡️ [PROTEÇÃO ATIVA] Durabilidade da espada atingiu ${dur}/1561 (limiar: ${this.MIN_DURABILITY_THRESHOLD}). Trocando no baú antes de bater...`);
+          await this.replaceSwordRoutine();
+          hitsUntilNextCheck = 1;
+          continue;
+        }
+
+        // LÓGICA DE DEGRAUS:
+        // Diferença até a durabilidade de troca
+        const diff = dur - this.MIN_DURABILITY_THRESHOLD;
+        if (diff < 150) {
+          // Quando estiver a menos de 150 pontos da troca, verifica estritamente a cada 3 hits
+          hitsUntilNextCheck = 3;
+        } else {
+          // Bate a metade da diferença antes de checar novamente (limitado entre 10 e 80 hits)
+          hitsUntilNextCheck = Math.max(5, Math.min(80, Math.floor(diff / 2)));
         }
       }
 
-      const dur = this.getSwordDurability(currentSword);
-
-      if (!currentSword || currentSword.name !== 'diamond_sword' || dur < this.MIN_DURABILITY_THRESHOLD) {
-        this.emitLog(`🛡️ Espada gasta ou ausente (${dur}/1561 <${this.MIN_DURABILITY_THRESHOLD}). Trocando no baú...`);
-        await this.replaceSwordRoutine();
-        continue;
-      }
-
-      if (Date.now() - this.lastInventoryCheck >= 10000) {
-        await this.checkAndSellDrops(false);
+      if (Date.now() - this.lastInventoryCheck >= 8000) {
+        await this.checkAndHandleInventoryDischarge();
         this.lastInventoryCheck = Date.now();
       }
 
@@ -494,13 +613,16 @@ class MobFarmerMacro {
           this.lastMobHitTimestamp = Date.now();
           this.sharedState.registerMobHit(this.config.username);
 
-          const afterHitSword = this.bot.heldItem;
-          const afterHitDur = this.getSwordDurability(afterHitSword);
-
-          if (!afterHitSword || afterHitSword.name !== 'diamond_sword' || afterHitDur < this.MIN_DURABILITY_THRESHOLD) {
-            this.emitLog(`🛡️ Durabilidade caiu para ${afterHitDur}/1561 logo após o ataque! Trocando no baú...`);
-            await this.replaceSwordRoutine();
-            continue;
+          // Checagem de segurança rápida a cada golpe na mão para evitar quebras por lag
+          const heldNow = this.bot.heldItem;
+          if (heldNow && heldNow.name === 'diamond_sword') {
+            const currentDurNow = this.getSwordDurability(heldNow);
+            if (currentDurNow <= this.MIN_DURABILITY_THRESHOLD) {
+              this.emitLog(`🛡️ [ALERTA DE SEGURANÇA] Durabilidade pós-hit: ${currentDurNow}/1561. Desarmando e trocando no baú...`);
+              await this.replaceSwordRoutine();
+              hitsUntilNextCheck = 1;
+              continue;
+            }
           }
 
           await this.sleep(400);
